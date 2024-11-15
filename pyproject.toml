@@ -1,0 +1,26 @@
+[project]
+name = "dpa-1"
+version = "0.1.0"
+description = "Add your description here"
+dependencies = [
+    "ultralytics>=8.3.27",
+    "opencv-python>=4.10.0.84",
+    "inference-sdk>=0.25.0",
+    "ipython>=8.29.0",
+]
+readme = "README.md"
+requires-python = ">= 3.8"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.rye]
+managed = true
+dev-dependencies = []
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dpa_1"]
