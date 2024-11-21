@@ -1,43 +1,45 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 
-export default function Header(): JSX.Element {
+interface HeaderProps {
+  onMenuPress: () => void;
+}
+
+const Header: React.FC<HeaderProps> = ({ onMenuPress }) => {
   return (
     <View style={styles.header}>
-      <TouchableOpacity>
+      <TouchableOpacity onPress={onMenuPress}>
         <Text style={styles.menuIcon}>☰</Text>
       </TouchableOpacity>
       <Text style={styles.title}>DPA</Text>
       <TouchableOpacity>
-        <Image
-            source={{ uri: 'https://via.placeholder.com/30' }} // Placeholder image URL
-            style={styles.profileImage}
-        />
+        <Text style={styles.profileIcon}>👤</Text>
       </TouchableOpacity>
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    padding: 15,
+    backgroundColor: '#1E293B',
+  },
+  menuIcon: {
+    fontSize: 24,
+    color: '#fff',
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
   },
-  menuIcon: {
+  profileIcon: {
     fontSize: 24,
     color: '#fff',
   },
-  profileImage: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#ccc',
-  },
 });
+
+export default Header;
