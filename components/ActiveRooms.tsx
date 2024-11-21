@@ -5,7 +5,7 @@ const ActiveRooms: React.FC = () => {
   const rooms = [
     { name: "Texas Hold'em Night", players: 4 },
     { name: 'The Boys', players: 8 },
-    { name: 'Home Sweet Home', players: 4 },
+    { name: 'Home Sweet Home', players: 5 },
   ];
 
   return (
@@ -24,19 +24,22 @@ const ActiveRooms: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     backgroundColor: '#1E293B',
-    borderRadius: 10,
     padding: 15,
+    borderRadius: 10,
     marginBottom: 20,
   },
   title: {
     fontSize: 18,
+    fontWeight: 'bold',
     color: '#fff',
     marginBottom: 10,
   },
   room: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
   },
   roomName: {
     color: '#fff',

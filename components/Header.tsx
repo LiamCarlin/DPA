@@ -32,9 +32,9 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 18,
     color: '#fff',
+    fontWeight: 'bold',
   },
   profileIcon: {
     fontSize: 24,

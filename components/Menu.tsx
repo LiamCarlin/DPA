@@ -4,22 +4,30 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 interface MenuProps {
   isOpen: boolean;
   onClose: () => void;
+  navigate: (screen: 'Home' | 'Statistics' | 'Leaderboard') => void;
 }
 
-const Menu: React.FC<MenuProps> = ({ isOpen, onClose }) => {
+const Menu: React.FC<MenuProps> = ({ isOpen, onClose, navigate }) => {
   if (!isOpen) return null;
+
+  const handleNavigation = (screen: 'Home' | 'Statistics' | 'Leaderboard') => {
+    navigate(screen); // Navigate to the selected screen
+    onClose(); // Close the menu
+  };
 
   return (
     <>
       <TouchableOpacity style={styles.backdrop} onPress={onClose} />
-
       <View style={styles.container}>
-        <TouchableOpacity onPress={onClose}>
-          <Text style={styles.hamburger}>☰</Text>
+        <TouchableOpacity onPress={() => handleNavigation('Home')}>
+          <Text style={styles.menuItem}>Home</Text>
         </TouchableOpacity>
-        <Text style={styles.menuItem}>Home</Text>
-        <Text style={styles.menuItem}>Profile</Text>
-        <Text style={styles.menuItem}>Settings</Text>
+        <TouchableOpacity onPress={() => handleNavigation('Statistics')}>
+          <Text style={styles.menuItem}>Statistics</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => handleNavigation('Leaderboard')}>
+          <Text style={styles.menuItem}>Leaderboard</Text>
+        </TouchableOpacity>
       </View>
     </>
   );
@@ -45,13 +53,8 @@ const styles = StyleSheet.create({
     padding: 20,
     zIndex: 10,
   },
-  hamburger: {
-    fontSize: 24,
-    color: '#fff',
-    marginBottom: 20,
-  },
   menuItem: {
-    fontSize: 20,
+    fontSize: 18,
     color: '#fff',
     marginVertical: 15,
   },

@@ -1,9 +1,9 @@
 import React from 'react';
-import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
 
-export default function ButtonSection(): JSX.Element {
+const ButtonSection: React.FC = () => {
   return (
-    <View style={styles.buttonsContainer}>
+    <View style={styles.container}>
       <TouchableOpacity style={styles.button}>
         <Text style={styles.buttonText}>📸 Chip Counter</Text>
       </TouchableOpacity>
@@ -12,13 +12,13 @@ export default function ButtonSection(): JSX.Element {
       </TouchableOpacity>
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  buttonsContainer: {
+  container: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 20,
+    marginVertical: 20,
   },
   button: {
     flex: 1,
@@ -33,3 +33,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 });
+
+export default ButtonSection;

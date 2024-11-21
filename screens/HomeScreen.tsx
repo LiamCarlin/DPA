@@ -1,25 +1,21 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import Header from '../components/Header';
-import Menu from '../components/Menu';
-import ActiveRooms from '../components/ActiveRooms';
 import ButtonSection from '../components/ButtonSection';
 import GraphSection from '../components/GraphSection';
+import ActiveRooms from '../components/ActiveRooms';
 
-const HomeScreen: React.FC = () => {
-  const [menuOpen, setMenuOpen] = useState(false);
+interface HomeScreenProps {
+  openMenu: () => void;
+}
 
+const HomeScreen: React.FC<HomeScreenProps> = ({ openMenu }) => {
   return (
     <View style={styles.container}>
-      <Menu isOpen={menuOpen} onClose={() => setMenuOpen(false)} />
-      <Header onMenuPress={() => setMenuOpen(true)} />
-      {!menuOpen && (
-        <>
-          <ButtonSection />
-          <GraphSection />
-          <ActiveRooms />
-        </>
-      )}
+      <Header onMenuPress={openMenu} />
+      <ButtonSection />
+      <GraphSection />
+      <ActiveRooms />
     </View>
   );
 };
@@ -28,7 +24,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#121212',
-    padding: 15,
+    padding: 20,
   },
 });
 
