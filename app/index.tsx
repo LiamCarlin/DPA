@@ -1,27 +1,48 @@
 import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import HomeScreen from '../screens/HomeScreen';
-import StatisticsScreen from '../screens/StatisticsScreen';
-import LeaderboardScreen from '../screens/LeaderboardScreen';
+import ActiveRoomsPage from '../screens/ActiveRoomsPage';
+import RoomPage from '../screens/RoomPage';
 import Menu from '../components/Menu';
 
 const Index: React.FC = () => {
-  const [currentScreen, setCurrentScreen] = useState<'Home' | 'Statistics' | 'Leaderboard'>('Home');
+  const [currentScreen, setCurrentScreen] = useState<'Home' | 'ActiveRooms' | 'Room'>('Home'); // Start at Home
+  const [rooms, setRooms] = useState<{ name: string; participants: { name: string; winLoss: number }[] }[]>([]);
+  const [selectedRoom, setSelectedRoom] = useState<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const navigateToScreen = (screen: 'Home' | 'Statistics' | 'Leaderboard') => {
-    setCurrentScreen(screen); // Navigate to the selected screen
-    setMenuOpen(false); // Close the menu automatically
+  const navigateTo = (screen: 'Home' | 'ActiveRooms' | 'Room', roomIndex?: number) => {
+    setCurrentScreen(screen);
+    if (roomIndex !== undefined) {
+      setSelectedRoom(roomIndex);
+    }
+    setMenuOpen(false); // Close menu on navigation
   };
 
   const renderScreen = () => {
     switch (currentScreen) {
       case 'Home':
-        return <HomeScreen openMenu={() => setMenuOpen(true)} />;
-      case 'Statistics':
-        return <StatisticsScreen openMenu={() => setMenuOpen(true)} />;
-      case 'Leaderboard':
-        return <LeaderboardScreen openMenu={() => setMenuOpen(true)} />;
+        return <HomeScreen rooms={rooms} navigateTo={navigateTo} openMenu={() => setMenuOpen(true)} />;
+      case 'ActiveRooms':
+        return (
+          <ActiveRoomsPage
+            rooms={rooms}
+            setRooms={setRooms}
+            navigateTo={navigateTo}
+            openMenu={() => setMenuOpen(true)}
+          />
+        );
+      case 'Room':
+        return (
+          selectedRoom !== null && (
+            <RoomPage
+              room={rooms[selectedRoom]}
+              roomIndex={selectedRoom}
+              setRooms={setRooms}
+              navigateTo={navigateTo}
+            />
+          )
+        );
       default:
         return null;
     }
@@ -33,7 +54,7 @@ const Index: React.FC = () => {
         <Menu
           isOpen={menuOpen}
           onClose={() => setMenuOpen(false)}
-          navigate={navigateToScreen} // Pass the navigation handler
+          navigate={navigateTo} // Align types here
         />
       )}
       {renderScreen()}

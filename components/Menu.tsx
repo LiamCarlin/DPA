@@ -4,29 +4,32 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 interface MenuProps {
   isOpen: boolean;
   onClose: () => void;
-  navigate: (screen: 'Home' | 'Statistics' | 'Leaderboard') => void;
+  navigate: (screen: 'Home' | 'ActiveRooms' | 'Room', roomIndex?: number) => void; // Updated types to match index.tsx
 }
 
 const Menu: React.FC<MenuProps> = ({ isOpen, onClose, navigate }) => {
-  if (!isOpen) return null;
+  if (!isOpen) return null; // If menu is not open, don't render anything.
 
-  const handleNavigation = (screen: 'Home' | 'Statistics' | 'Leaderboard') => {
-    navigate(screen); // Navigate to the selected screen
-    onClose(); // Close the menu
+  const handleNavigation = (screen: 'Home' | 'ActiveRooms' | 'Room') => {
+    navigate(screen); // Trigger navigation
+    onClose(); // Close the menu after navigation
   };
 
   return (
     <>
+      {/* Backdrop to close the menu when clicked outside */}
       <TouchableOpacity style={styles.backdrop} onPress={onClose} />
+      
+      {/* Menu Content */}
       <View style={styles.container}>
         <TouchableOpacity onPress={() => handleNavigation('Home')}>
           <Text style={styles.menuItem}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => handleNavigation('Statistics')}>
-          <Text style={styles.menuItem}>Statistics</Text>
+        <TouchableOpacity onPress={() => handleNavigation('ActiveRooms')}>
+          <Text style={styles.menuItem}>Active Rooms</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => handleNavigation('Leaderboard')}>
-          <Text style={styles.menuItem}>Leaderboard</Text>
+        <TouchableOpacity onPress={() => handleNavigation('Room')}>
+          <Text style={styles.menuItem}>Room (Example)</Text>
         </TouchableOpacity>
       </View>
     </>
