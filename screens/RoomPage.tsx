@@ -1,16 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, TextInput, Text, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, StyleSheet, FlatList, TextInput, Text, TouchableOpacity, Modal, Alert, ToastAndroid, Dimensions } from 'react-native';
 import * as d3Shape from 'd3-shape';
 import { scaleLinear, scalePoint } from 'd3-scale';
-import Svg, { Line, Path, G, Text as SvgText } from 'react-native-svg';
+import Svg, { Line, Path, G, Circle, Text as SvgText, Rect } from 'react-native-svg';
+import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import Header from '../components/Header';
 
 interface Participant {
   name: string;
   winLoss: number;
   history: { date: string; amount: number }[];
-  in?: string; // Temporary "In" value during updates
-  out?: string; // Temporary "Out" value during updates
+  in?: string;
+  out?: string;
+  selectedDate?: string;
 }
 
 interface RoomPageProps {
@@ -27,8 +29,17 @@ interface RoomPageProps {
 const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigateTo }) => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [updatedParticipants, setUpdatedParticipants] = useState([...room.participants]);
+  const [isDatePickerVisible, setDatePickerVisible] = useState(false);
+  const [selectedParticipant, setSelectedParticipant] = useState<string | null>(null);
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; value: number; date: string } | null>(null);
+  const [isModalVisible, setModalVisible] = useState(false);
+  const [newParticipantName, setNewParticipantName] = useState('');
+  const [removeModalVisible, setRemoveModalVisible] = useState(false);
 
-  // Calculate sums for "In" and "Out"
+  const { width } = Dimensions.get('window');
+  const graphWidth = width - 40;
+  const graphHeight = 250;
+
   const totalIn = updatedParticipants.reduce((sum, participant) => {
     return sum + (parseFloat(participant.in || '0') || 0);
   }, 0);
@@ -37,31 +48,45 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
     return sum + (parseFloat(participant.out || '0') || 0);
   }, 0);
 
-  // Function to handle confirmation of updates
+  const handleDateConfirm = (date: Date) => {
+    setDatePickerVisible(false);
+    if (selectedParticipant) {
+      const formattedDate = date.toISOString().slice(0, 10);
+      setUpdatedParticipants((prev) =>
+        prev.map((p) =>
+          p.name === selectedParticipant ? { ...p, selectedDate: formattedDate } : p
+        )
+      );
+    }
+  };
+
   const handleConfirmUpdate = () => {
+    const currentDate = new Date().toISOString().slice(0, 10);
+
     const newParticipants = updatedParticipants.map((participant) => {
       const amountIn = parseFloat(participant.in || '0');
       const amountOut = parseFloat(participant.out || '0');
 
-      // Update the history with the new values
+      const gameDate = participant.selectedDate || currentDate;
+
       const updatedHistory = [
         ...(participant.history || []),
         {
-          date: new Date().toISOString().slice(0, 10),
+          date: gameDate,
           amount: amountOut - amountIn,
         },
       ];
 
       return {
         ...participant,
-        winLoss: updatedHistory.reduce((acc, entry) => acc + entry.amount, 0), // Recalculate win/loss
+        winLoss: updatedHistory.reduce((acc, entry) => acc + entry.amount, 0),
         history: updatedHistory,
-        in: undefined, // Clear temporary values
+        in: undefined,
         out: undefined,
+        selectedDate: undefined,
       };
     });
 
-    // Update the room participants and immediately refresh the state
     setUpdatedParticipants(newParticipants);
     setRooms((prevRooms) => {
       const updatedRooms = [...prevRooms];
@@ -69,14 +94,52 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
       return updatedRooms;
     });
 
-    setIsUpdating(false); // Exit updating mode
+    setIsUpdating(false);
+    ToastAndroid.show('Updates confirmed successfully!', ToastAndroid.SHORT);
+  };
+
+  const addParticipant = () => {
+    if (newParticipantName.trim() === '') {
+      Alert.alert('Invalid Name', 'Please enter a valid participant name.');
+      return;
+    }
+    if (updatedParticipants.some(p => p.name === newParticipantName.trim())) {
+      Alert.alert('Duplicate Name', 'A participant with this name already exists.');
+      return;
+    }
+
+    const newParticipant = {
+      name: newParticipantName.trim(),
+      winLoss: 0,
+      history: [],
+    };
+
+    setUpdatedParticipants((prev) => [...prev, newParticipant]);
+    setModalVisible(false);
+    setNewParticipantName('');
+    ToastAndroid.show('Participant added successfully!', ToastAndroid.SHORT);
+  };
+
+  const handleRemoveParticipant = (name: string) => {
+    Alert.alert(
+      'Confirm Removal',
+      `Are you sure you want to remove ${name}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            setUpdatedParticipants((prev) => prev.filter((p) => p.name !== name));
+            setRemoveModalVisible(false);
+            ToastAndroid.show('Participant removed successfully!', ToastAndroid.SHORT);
+          },
+        },
+      ]
+    );
   };
 
   const renderGraph = () => {
-    const width = 300;
-    const height = 200;
-    const padding = 20;
-
     if (!updatedParticipants || updatedParticipants.length === 0) {
       return (
         <View style={styles.graphContainer}>
@@ -86,11 +149,11 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
     }
 
     const data = updatedParticipants.map((participant) =>
-      (participant.history || []).map((entry) => entry.amount)
+      (participant.history || []).map((entry) => ({ date: entry.date, amount: entry.amount }))
     );
 
     const xLabels = updatedParticipants[0]?.history?.map((entry) => entry.date) || [];
-    const flatData = data.flat();
+    const flatData = data.flat().map((d) => d.amount);
 
     if (flatData.length === 0) {
       return (
@@ -102,74 +165,86 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
 
     const xScale = scalePoint()
       .domain(xLabels)
-      .range([padding, width - padding]);
+      .range([40, graphWidth - 40]);
 
     const yScale = scaleLinear()
-      .domain([Math.min(...flatData, 0), Math.max(...flatData, 1)])
-      .range([height - padding, padding]);
+      .domain([Math.min(...flatData, 0) - 10, Math.max(...flatData, 1) + 10])
+      .range([graphHeight - 40, 40]);
 
-    const linePaths = updatedParticipants.map((participant) => {
+    const linePaths = updatedParticipants.map((participant, index) => {
       const lineGenerator = d3Shape
         .line<{ date: string; amount: number }>()
         .x((d) => xScale(d.date)!)
         .y((d) => yScale(d.amount))
-        .curve(d3Shape.curveNatural);
+        .curve(d3Shape.curveBasis);
 
-      return lineGenerator(participant.history || []) || '';
+      return {
+        path: lineGenerator(participant.history || []) || '',
+        color: `hsl(${(index * 60) % 360}, 70%, 60%)`,
+        data: participant.history || [],
+      };
     });
 
     return (
       <View style={styles.graphContainer}>
-        <Svg width={width} height={height}>
-          {/* Grid */}
-          {yScale.ticks(5).map((tick, i) => (
-            <Line
-              key={`grid-line-${i}`}
-              x1={padding}
-              x2={width - padding}
-              y1={yScale(tick)}
-              y2={yScale(tick)}
-              stroke="lightgray"
-              strokeDasharray="4,2"
-            />
+        <Svg width={graphWidth} height={graphHeight}>
+          <Rect x={0} y={0} width={graphWidth} height={graphHeight} stroke="white" strokeWidth={2} fill="none" />
+          {linePaths.map((line, i) => (
+            <Path key={`line-${i}`} d={line.path} stroke={line.color} strokeWidth={2} fill="none" />
           ))}
-
-          {/* Line Paths */}
-          {linePaths.map((path, i) => (
-            <Path key={`line-${i}`} d={path} stroke={`rgb(${50 + i * 50}, 100, 200)`} strokeWidth={2} fill="none" />
-          ))}
-
-          {/* X Axis Labels */}
-          <G>
-            {xLabels.map((label, i) => (
+          {linePaths.map((line, i) =>
+            line.data.map((point, j) => (
+              <Circle
+                key={`point-${i}-${j}`}
+                cx={xScale(point.date)}
+                cy={yScale(point.amount)}
+                r={6}
+                fill={line.color}
+                onPress={() =>
+                  setTooltip({
+                    x: xScale(point.date)!,
+                    y: yScale(point.amount),
+                    value: point.amount,
+                    date: point.date,
+                  })
+                }
+              />
+            ))
+          )}
+          {tooltip && (
+            <G>
+              {/* Simulated Shadow */}
+              <Rect
+                x={tooltip.x - 38}
+                y={tooltip.y - 28}
+                width={80}
+                height={20}
+                fill="rgba(0, 0, 0, 0.3)"
+                rx={5}
+                ry={5}
+              />
+              {/* Tooltip Background */}
+              <Rect
+                x={tooltip.x - 40}
+                y={tooltip.y - 30}
+                width={80}
+                height={20}
+                fill="black"
+                rx={5}
+                ry={5}
+              />
+              {/* Tooltip Text */}
               <SvgText
-                key={`x-label-${i}`}
-                x={xScale(label)}
-                y={height - padding / 2}
-                fontSize="10"
+                x={tooltip.x}
+                y={tooltip.y - 15}
+                fontSize="12"
                 fill="white"
                 textAnchor="middle"
               >
-                {label}
+                {`${tooltip.date}: ${tooltip.value.toFixed(2)}`}
               </SvgText>
-            ))}
-          </G>
-
-          {/* Y Axis Labels */}
-          <G>
-            {yScale.ticks(5).map((tick, i) => (
-              <SvgText
-                key={`y-label-${i}`}
-                x={padding / 2}
-                y={yScale(tick)}
-                fontSize="10"
-                fill="white"
-                textAnchor="middle"
-              >
-                {tick.toFixed(0)}
-              </SvgText>
-            ))}
-          </G>
+            </G>
+          )}
         </Svg>
       </View>
     );
@@ -177,20 +252,16 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
 
   return (
     <View style={styles.container}>
-      <Header
-        title={room.name}
-        onBack={() => navigateTo('ActiveRooms')}
-        onUpdate={() => setIsUpdating(!isUpdating)}
-      />
-
+      <Header title={room.name} onBack={() => navigateTo('ActiveRooms')} onUpdate={() => setIsUpdating(!isUpdating)} />
+      {renderGraph()}
       <FlatList
         data={updatedParticipants}
         keyExtractor={(item, index) => index.toString()}
-        renderItem={({ item }) =>
+        renderItem={({ item, index }) =>
           isUpdating ? (
             <View style={styles.participantRow}>
+              <View style={[styles.colorDot, { backgroundColor: `hsl(${(index * 60) % 360}, 70%, 60%)` }]} />
               <Text style={styles.participantName}>{item.name}</Text>
-              {/* "In" Input */}
               <TextInput
                 style={styles.input}
                 placeholder="In"
@@ -198,13 +269,10 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
                 value={item.in || ''}
                 onChangeText={(text) =>
                   setUpdatedParticipants((prev) =>
-                    prev.map((p) =>
-                      p.name === item.name ? { ...p, in: text } : p
-                    )
+                    prev.map((p) => (p.name === item.name ? { ...p, in: text } : p))
                   )
                 }
               />
-              {/* "Out" Input */}
               <TextInput
                 style={styles.input}
                 placeholder="Out"
@@ -212,43 +280,103 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
                 value={item.out || ''}
                 onChangeText={(text) =>
                   setUpdatedParticipants((prev) =>
-                    prev.map((p) =>
-                      p.name === item.name ? { ...p, out: text } : p
-                    )
+                    prev.map((p) => (p.name === item.name ? { ...p, out: text } : p))
                   )
                 }
               />
+              <TouchableOpacity style={styles.dateButton} onPress={() => setSelectedParticipant(item.name)}>
+                <Text style={styles.dateButtonText}>{item.selectedDate || 'Date'}</Text>
+              </TouchableOpacity>
             </View>
           ) : (
             <View style={styles.participantRow}>
+              <View style={[styles.colorDot, { backgroundColor: `hsl(${(index * 60) % 360}, 70%, 60%)` }]} />
               <Text style={styles.participantName}>{item.name}</Text>
               <Text style={styles.participantDate}>
-                {item.history && item.history.length > 0
-                  ? item.history[item.history.length - 1].date
-                  : 'No Data'}
+                {item.history && item.history.length > 0 ? item.history[item.history.length - 1].date : 'No Data'}
               </Text>
               <Text style={styles.winLoss}>${item.winLoss.toFixed(2)}</Text>
             </View>
           )
         }
       />
-
+      {isUpdating && (
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
+            <Text style={styles.addButtonText}>Add Participant</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.removeButton} onPress={() => setRemoveModalVisible(true)}>
+            <Text style={styles.removeButtonText}>Remove Participant</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      <Modal transparent visible={isModalVisible} animationType="slide" onRequestClose={() => setModalVisible(false)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Add Participant</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Enter participant's name"
+              value={newParticipantName}
+              onChangeText={setNewParticipantName}
+            />
+            <TouchableOpacity style={styles.modalButton} onPress={addParticipant}>
+              <Text style={styles.modalButtonText}>Add</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.modalCancelButton]}
+              onPress={() => setModalVisible(false)}
+            >
+              <Text style={styles.modalCancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+      <Modal
+        transparent
+        visible={removeModalVisible}
+        animationType="slide"
+        onRequestClose={() => setRemoveModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Remove Participant</Text>
+            <FlatList
+              data={updatedParticipants}
+              keyExtractor={(item, index) => index.toString()}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.removeItem}
+                  onPress={() => handleRemoveParticipant(item.name)}
+                >
+                  <Text style={styles.modalItemText}>{item.name}</Text>
+                </TouchableOpacity>
+              )}
+            />
+            <TouchableOpacity
+              style={[styles.modalButton, styles.modalCancelButton]}
+              onPress={() => setRemoveModalVisible(false)}
+            >
+              <Text style={styles.modalCancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
       {isUpdating && (
         <TouchableOpacity
-          style={[
-            styles.confirmButton,
-            totalIn !== totalOut && styles.disabledButton,
-          ]}
+          style={[styles.confirmButton, totalIn !== totalOut && styles.disabledButton]}
           onPress={handleConfirmUpdate}
           disabled={totalIn !== totalOut}
         >
-          <Text style={styles.confirmButtonText}>
-            Confirm ({totalIn !== totalOut ? 'Mismatch' : 'Ready'})
-          </Text>
+          <Text style={styles.confirmButtonText}>Confirm ({totalIn !== totalOut ? 'Mismatch' : 'Ready'})</Text>
         </TouchableOpacity>
       )}
-
-      {!isUpdating && renderGraph()}
+      <DateTimePickerModal
+        isVisible={isDatePickerVisible}
+        mode="date"
+        onConfirm={handleDateConfirm}
+        onCancel={() => setDatePickerVisible(false)}
+      />
     </View>
   );
 };
@@ -259,17 +387,34 @@ const styles = StyleSheet.create({
     backgroundColor: '#121212',
     padding: 20,
   },
+  graphContainer: {
+    marginTop: 20,
+    height: 250,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#fff',
+    borderRadius: 5,
+    padding: 10,
+    backgroundColor: '#1e1e1e',
+  },
   participantRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#333',
   },
+  colorDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 8,
+  },
   participantName: {
     color: '#fff',
     fontSize: 16,
+    flex: 1,
   },
   participantDate: {
     color: '#888',
@@ -289,6 +434,103 @@ const styles = StyleSheet.create({
     width: 60,
     textAlign: 'center',
   },
+  dateButton: {
+    backgroundColor: '#333',
+    padding: 5,
+    borderRadius: 5,
+    marginHorizontal: 5,
+    flex: 0.2,
+  },
+  dateButtonText: {
+    color: '#fff',
+    textAlign: 'center',
+    fontSize: 14,
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+  },
+  addButton: {
+    flex: 1,
+    marginRight: 10,
+    padding: 10,
+    backgroundColor: '#5cb85c',
+    borderRadius: 5,
+    alignItems: 'center',
+  },
+  addButtonText: {
+    color: '#fff',
+    fontSize: 16,
+  },
+  removeButton: {
+    flex: 1,
+    padding: 10,
+    backgroundColor: '#d9534f',
+    borderRadius: 5,
+    alignItems: 'center',
+  },
+  removeButtonText: {
+    color: '#fff',
+    fontSize: 16,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  },
+  modalContent: {
+    width: '80%',
+    backgroundColor: '#2e2e2e',
+    borderRadius: 10,
+    padding: 20,
+    alignItems: 'center',
+  },
+  modalTitle: {
+    color: '#fff',
+    fontSize: 18,
+    marginBottom: 10,
+  },
+  modalInput: {
+    backgroundColor: '#444',
+    color: '#fff',
+    width: '100%',
+    borderRadius: 5,
+    paddingHorizontal: 10,
+    marginBottom: 20,
+  },
+  modalButton: {
+    backgroundColor: '#5cb85c',
+    padding: 10,
+    borderRadius: 5,
+    marginBottom: 10,
+    width: '100%',
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+  },
+  modalCancelButton: {
+    backgroundColor: '#d9534f',
+  },
+  modalCancelButtonText: {
+    color: '#fff',
+    fontSize: 16,
+  },
+  removeItem: {
+    padding: 10,
+    marginVertical: 5,
+    backgroundColor: '#444',
+    borderRadius: 5,
+    width: '100%',
+    alignItems: 'center',
+  },
+  modalItemText: {
+    color: '#fff',
+    fontSize: 16,
+  },
   confirmButton: {
     backgroundColor: '#4ADE80',
     padding: 10,
@@ -303,15 +545,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
   },
-  graphContainer: {
-    marginTop: 20,
-    height: 200,
-    alignItems: 'center',
-  },
   noDataText: {
     color: '#fff',
     textAlign: 'center',
     marginVertical: 20,
+    fontSize: 16,
   },
 });
 
