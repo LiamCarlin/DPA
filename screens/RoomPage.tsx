@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, FlatList, TextInput, Text, TouchableOpacity, Modal, Alert, ToastAndroid, Dimensions } from 'react-native';
 import * as d3Shape from 'd3-shape';
 import { scaleLinear, scalePoint } from 'd3-scale';
@@ -40,6 +40,18 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
   const graphWidth = width - 40;
   const graphHeight = 250;
 
+  useEffect(() => {
+    if (isUpdating) {
+      const currentDate = new Date().toISOString().slice(0, 10);
+      setUpdatedParticipants((prev) =>
+        prev.map((participant) => ({
+          ...participant,
+          selectedDate: participant.selectedDate || currentDate,
+        }))
+      );
+    }
+  }, [isUpdating]);
+
   const totalIn = updatedParticipants.reduce((sum, participant) => {
     return sum + (parseFloat(participant.in || '0') || 0);
   }, 0);
@@ -47,6 +59,12 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
   const totalOut = updatedParticipants.reduce((sum, participant) => {
     return sum + (parseFloat(participant.out || '0') || 0);
   }, 0);
+
+  const formatDate = (isoDate: string): string => {
+    const date = new Date(isoDate);
+    const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+    return date.toLocaleDateString(undefined, options);
+  };
 
   const handleDateConfirm = (date: Date) => {
     setDatePickerVisible(false);
@@ -61,18 +79,21 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
   };
 
   const handleConfirmUpdate = () => {
-    const currentDate = new Date().toISOString().slice(0, 10);
+    for (const participant of updatedParticipants) {
+      if (!participant.selectedDate) {
+        Alert.alert('Missing Date', `Please select a date for ${participant.name}.`);
+        return;
+      }
+    }
 
     const newParticipants = updatedParticipants.map((participant) => {
       const amountIn = parseFloat(participant.in || '0');
       const amountOut = parseFloat(participant.out || '0');
 
-      const gameDate = participant.selectedDate || currentDate;
-
       const updatedHistory = [
         ...(participant.history || []),
         {
-          date: gameDate,
+          date: participant.selectedDate!,
           amount: amountOut - amountIn,
         },
       ];
@@ -103,7 +124,7 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
       Alert.alert('Invalid Name', 'Please enter a valid participant name.');
       return;
     }
-    if (updatedParticipants.some(p => p.name === newParticipantName.trim())) {
+    if (updatedParticipants.some((p) => p.name === newParticipantName.trim())) {
       Alert.alert('Duplicate Name', 'A participant with this name already exists.');
       return;
     }
@@ -152,8 +173,10 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
       (participant.history || []).map((entry) => ({ date: entry.date, amount: entry.amount }))
     );
 
-    const xLabels = updatedParticipants[0]?.history?.map((entry) => entry.date) || [];
-    const flatData = data.flat().map((d) => d.amount);
+    const flatData = data.flat();
+    const uniqueDates = [...new Set(flatData.map((d) => d.date))].sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+    const minAmount = Math.min(...flatData.map((d) => d.amount), 0);
+    const maxAmount = Math.max(...flatData.map((d) => d.amount), 1);
 
     if (flatData.length === 0) {
       return (
@@ -164,11 +187,11 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
     }
 
     const xScale = scalePoint()
-      .domain(xLabels)
+      .domain(uniqueDates)
       .range([40, graphWidth - 40]);
 
     const yScale = scaleLinear()
-      .domain([Math.min(...flatData, 0) - 10, Math.max(...flatData, 1) + 10])
+      .domain([minAmount - 10, maxAmount + 10])
       .range([graphHeight - 40, 40]);
 
     const linePaths = updatedParticipants.map((participant, index) => {
@@ -189,6 +212,28 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
       <View style={styles.graphContainer}>
         <Svg width={graphWidth} height={graphHeight}>
           <Rect x={0} y={0} width={graphWidth} height={graphHeight} stroke="white" strokeWidth={2} fill="none" />
+          {uniqueDates.map((date, i) => (
+            <Line
+              key={`grid-line-${i}`}
+              x1={xScale(date)!}
+              x2={xScale(date)!}
+              y1={graphHeight - 40}
+              y2={40}
+              stroke="lightgray"
+              strokeWidth={0.5}
+            />
+          ))}
+          {yScale.ticks(5).map((tick, i) => (
+            <Line
+              key={`horizontal-grid-line-${i}`}
+              x1={40}
+              x2={graphWidth - 40}
+              y1={yScale(tick)}
+              y2={yScale(tick)}
+              stroke="lightgray"
+              strokeWidth={0.5}
+            />
+          ))}
           {linePaths.map((line, i) => (
             <Path key={`line-${i}`} d={line.path} stroke={line.color} strokeWidth={2} fill="none" />
           ))}
@@ -205,7 +250,7 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
                     x: xScale(point.date)!,
                     y: yScale(point.amount),
                     value: point.amount,
-                    date: point.date,
+                    date: formatDate(point.date),
                   })
                 }
               />
@@ -213,27 +258,15 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
           )}
           {tooltip && (
             <G>
-              {/* Simulated Shadow */}
               <Rect
-                x={tooltip.x - 38}
-                y={tooltip.y - 28}
-                width={80}
-                height={20}
-                fill="rgba(0, 0, 0, 0.3)"
-                rx={5}
-                ry={5}
-              />
-              {/* Tooltip Background */}
-              <Rect
-                x={tooltip.x - 40}
+                x={tooltip.x - 50}
                 y={tooltip.y - 30}
-                width={80}
-                height={20}
+                width={100}
+                height={30}
                 fill="black"
                 rx={5}
                 ry={5}
               />
-              {/* Tooltip Text */}
               <SvgText
                 x={tooltip.x}
                 y={tooltip.y - 15}
@@ -241,7 +274,7 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
                 fill="white"
                 textAnchor="middle"
               >
-                {`${tooltip.date}: ${tooltip.value.toFixed(2)}`}
+                {`${tooltip.date}: $${tooltip.value.toFixed(2)}`}
               </SvgText>
             </G>
           )}
@@ -284,7 +317,13 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
                   )
                 }
               />
-              <TouchableOpacity style={styles.dateButton} onPress={() => setSelectedParticipant(item.name)}>
+              <TouchableOpacity
+                style={styles.dateButton}
+                onPress={() => {
+                  setSelectedParticipant(item.name);
+                  setDatePickerVisible(true);
+                }}
+              >
                 <Text style={styles.dateButtonText}>{item.selectedDate || 'Date'}</Text>
               </TouchableOpacity>
             </View>
@@ -293,7 +332,7 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
               <View style={[styles.colorDot, { backgroundColor: `hsl(${(index * 60) % 360}, 70%, 60%)` }]} />
               <Text style={styles.participantName}>{item.name}</Text>
               <Text style={styles.participantDate}>
-                {item.history && item.history.length > 0 ? item.history[item.history.length - 1].date : 'No Data'}
+                {item.history && item.history.length > 0 ? formatDate(item.history[item.history.length - 1].date) : 'No Data'}
               </Text>
               <Text style={styles.winLoss}>${item.winLoss.toFixed(2)}</Text>
             </View>
@@ -310,58 +349,6 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
           </TouchableOpacity>
         </View>
       )}
-      <Modal transparent visible={isModalVisible} animationType="slide" onRequestClose={() => setModalVisible(false)}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add Participant</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Enter participant's name"
-              value={newParticipantName}
-              onChangeText={setNewParticipantName}
-            />
-            <TouchableOpacity style={styles.modalButton} onPress={addParticipant}>
-              <Text style={styles.modalButtonText}>Add</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.modalButton, styles.modalCancelButton]}
-              onPress={() => setModalVisible(false)}
-            >
-              <Text style={styles.modalCancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-      <Modal
-        transparent
-        visible={removeModalVisible}
-        animationType="slide"
-        onRequestClose={() => setRemoveModalVisible(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Remove Participant</Text>
-            <FlatList
-              data={updatedParticipants}
-              keyExtractor={(item, index) => index.toString()}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.removeItem}
-                  onPress={() => handleRemoveParticipant(item.name)}
-                >
-                  <Text style={styles.modalItemText}>{item.name}</Text>
-                </TouchableOpacity>
-              )}
-            />
-            <TouchableOpacity
-              style={[styles.modalButton, styles.modalCancelButton]}
-              onPress={() => setRemoveModalVisible(false)}
-            >
-              <Text style={styles.modalCancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
       {isUpdating && (
         <TouchableOpacity
           style={[styles.confirmButton, totalIn !== totalOut && styles.disabledButton]}
@@ -371,6 +358,14 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
           <Text style={styles.confirmButtonText}>Confirm ({totalIn !== totalOut ? 'Mismatch' : 'Ready'})</Text>
         </TouchableOpacity>
       )}
+      {isUpdating && (
+        <TouchableOpacity
+          style={styles.updateValuesButton}
+          onPress={() => setModalVisible(true)}
+        >
+          <Text style={styles.updateValuesButtonText}>Edit Values</Text>
+        </TouchableOpacity>
+      )}
       <DateTimePickerModal
         isVisible={isDatePickerVisible}
         mode="date"
@@ -378,7 +373,7 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
         onCancel={() => setDatePickerVisible(false)}
       />
     </View>
-  );
+  );  
 };
 
 const styles = StyleSheet.create({
@@ -439,7 +434,7 @@ const styles = StyleSheet.create({
     padding: 5,
     borderRadius: 5,
     marginHorizontal: 5,
-    flex: 0.2,
+    flex: 0.9,
   },
   dateButtonText: {
     color: '#fff',
@@ -551,6 +546,23 @@ const styles = StyleSheet.create({
     marginVertical: 20,
     fontSize: 16,
   },
+  updateValuesButton: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: '#1E90FF',
+    borderRadius: 5,
+    alignItems: 'center',
+  },
+  updateValuesButtonText: {
+    color: '#fff',
+    fontSize: 16,
+  },
+  participantEditRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  
 });
 
 export default RoomPage;
