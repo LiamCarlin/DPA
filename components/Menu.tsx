@@ -4,13 +4,13 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 interface MenuProps {
   isOpen: boolean;
   onClose: () => void;
-  navigate: (screen: 'Home' | 'ActiveRooms' | 'Room', roomIndex?: number) => void; // Updated types to match index.tsx
+  navigate: (screen: 'Home' | 'ActiveRooms' | 'Room' | 'Profile' | 'Login', roomIndex?: number) => void;
 }
 
 const Menu: React.FC<MenuProps> = ({ isOpen, onClose, navigate }) => {
   if (!isOpen) return null; // If menu is not open, don't render anything.
 
-  const handleNavigation = (screen: 'Home' | 'ActiveRooms' | 'Room') => {
+  const handleNavigation = (screen: 'Home' | 'ActiveRooms' | 'Room' | 'Profile' | 'Login') => {
     navigate(screen); // Trigger navigation
     onClose(); // Close the menu after navigation
   };
@@ -19,7 +19,7 @@ const Menu: React.FC<MenuProps> = ({ isOpen, onClose, navigate }) => {
     <>
       {/* Backdrop to close the menu when clicked outside */}
       <TouchableOpacity style={styles.backdrop} onPress={onClose} />
-      
+
       {/* Menu Content */}
       <View style={styles.container}>
         <TouchableOpacity onPress={() => handleNavigation('Home')}>
@@ -30,6 +30,9 @@ const Menu: React.FC<MenuProps> = ({ isOpen, onClose, navigate }) => {
         </TouchableOpacity>
         <TouchableOpacity onPress={() => handleNavigation('Room')}>
           <Text style={styles.menuItem}>Room (Example)</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => handleNavigation('Profile')}> {/* Add Profile */}
+          <Text style={styles.menuItem}>Profile</Text>
         </TouchableOpacity>
       </View>
     </>

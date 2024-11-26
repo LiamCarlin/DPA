@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, TextInput, Text, TouchableOpacity, Modal, Alert, ToastAndroid, Dimensions } from 'react-native';
+import { View, StyleSheet, FlatList, TextInput, Text, TouchableOpacity, Modal, Alert, ToastAndroid, Dimensions, TouchableWithoutFeedback } from 'react-native';
 import * as d3Shape from 'd3-shape';
 import { scaleLinear, scalePoint } from 'd3-scale';
 import Svg, { Line, Path, G, Circle, Text as SvgText, Rect } from 'react-native-svg';
@@ -9,11 +9,12 @@ import Header from '../components/Header';
 interface Participant {
   name: string;
   winLoss: number;
-  history: { date: string; amount: number }[];
+  history: { date: string; amount: number; in?: number; out?: number }[]; // Add `in` and `out` here
   in?: string;
   out?: string;
   selectedDate?: string;
 }
+
 
 interface RoomPageProps {
   room: { name: string; participants: Participant[] };
@@ -35,6 +36,9 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
   const [isModalVisible, setModalVisible] = useState(false);
   const [newParticipantName, setNewParticipantName] = useState('');
   const [removeModalVisible, setRemoveModalVisible] = useState(false);
+  const [isEditDateModalVisible, setEditDateModalVisible] = useState(false);
+  const [isEditValuesModalVisible, setEditValuesModalVisible] = useState(false);
+  const [selectedEditDate, setSelectedEditDate] = useState<string | null>(null);
 
   const { width } = Dimensions.get('window');
   const graphWidth = width - 40;
@@ -79,25 +83,20 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
   };
 
   const handleConfirmUpdate = () => {
-    for (const participant of updatedParticipants) {
-      if (!participant.selectedDate) {
-        Alert.alert('Missing Date', `Please select a date for ${participant.name}.`);
-        return;
-      }
-    }
-
     const newParticipants = updatedParticipants.map((participant) => {
       const amountIn = parseFloat(participant.in || '0');
       const amountOut = parseFloat(participant.out || '0');
-
+  
       const updatedHistory = [
         ...(participant.history || []),
         {
           date: participant.selectedDate!,
           amount: amountOut - amountIn,
+          in: amountIn, // Add `in`
+          out: amountOut, // Add `out`
         },
       ];
-
+  
       return {
         ...participant,
         winLoss: updatedHistory.reduce((acc, entry) => acc + entry.amount, 0),
@@ -107,39 +106,34 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
         selectedDate: undefined,
       };
     });
-
+  
     setUpdatedParticipants(newParticipants);
-    setRooms((prevRooms) => {
-      const updatedRooms = [...prevRooms];
-      updatedRooms[roomIndex].participants = newParticipants;
-      return updatedRooms;
-    });
-
     setIsUpdating(false);
     ToastAndroid.show('Updates confirmed successfully!', ToastAndroid.SHORT);
   };
+  
 
   const addParticipant = () => {
     if (newParticipantName.trim() === '') {
       Alert.alert('Invalid Name', 'Please enter a valid participant name.');
       return;
     }
-    if (updatedParticipants.some((p) => p.name === newParticipantName.trim())) {
+    if (updatedParticipants.some((p) => p.name.toLowerCase() === newParticipantName.trim().toLowerCase())) {
       Alert.alert('Duplicate Name', 'A participant with this name already exists.');
       return;
     }
-
+  
     const newParticipant = {
       name: newParticipantName.trim(),
       winLoss: 0,
       history: [],
     };
-
+  
     setUpdatedParticipants((prev) => [...prev, newParticipant]);
     setModalVisible(false);
     setNewParticipantName('');
     ToastAndroid.show('Participant added successfully!', ToastAndroid.SHORT);
-  };
+  };  
 
   const handleRemoveParticipant = (name: string) => {
     Alert.alert(
@@ -153,12 +147,13 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
           onPress: () => {
             setUpdatedParticipants((prev) => prev.filter((p) => p.name !== name));
             setRemoveModalVisible(false);
-            ToastAndroid.show('Participant removed successfully!', ToastAndroid.SHORT);
+            ToastAndroid.show(`${name} removed successfully!`, ToastAndroid.SHORT);
           },
         },
       ]
     );
   };
+  
 
   const renderGraph = () => {
     if (!updatedParticipants || updatedParticipants.length === 0) {
@@ -361,7 +356,7 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
       {isUpdating && (
         <TouchableOpacity
           style={styles.updateValuesButton}
-          onPress={() => setModalVisible(true)}
+          onPress={() => setEditDateModalVisible(true)}
         >
           <Text style={styles.updateValuesButtonText}>Edit Values</Text>
         </TouchableOpacity>
@@ -372,8 +367,200 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
         onConfirm={handleDateConfirm}
         onCancel={() => setDatePickerVisible(false)}
       />
+  
+      {/* Add Participant Modal */}
+      <Modal
+        transparent
+        visible={isModalVisible}
+        animationType="slide"
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setModalVisible(false)}>
+          <View style={styles.modalContainer}>
+            <TouchableWithoutFeedback>
+              <View style={styles.modalContent}>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Enter name"
+                  value={newParticipantName}
+                  onChangeText={setNewParticipantName}
+                />
+                <TouchableOpacity style={styles.modalButton} onPress={addParticipant}>
+                  <Text style={styles.modalButtonText}>Add</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+  
+      {/* Remove Participant Modal */}
+      <Modal
+        transparent
+        visible={removeModalVisible}
+        animationType="slide"
+        onRequestClose={() => setRemoveModalVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setRemoveModalVisible(false)}>
+          <View style={styles.modalContainer}>
+            <TouchableWithoutFeedback>
+              <View style={styles.modalContent}>
+                <FlatList
+                  data={updatedParticipants}
+                  keyExtractor={(item, index) => index.toString()}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={styles.removeButton}
+                      onPress={() => handleRemoveParticipant(item.name)}
+                    >
+                      <Text style={styles.removeButtonText}>{item.name}</Text>
+                    </TouchableOpacity>
+                  )}
+                />
+                <TouchableOpacity
+                  style={styles.modalButton}
+                  onPress={() => setRemoveModalVisible(false)}
+                >
+                  <Text style={styles.modalButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+  
+      {/* Date Selection Modal */}
+      <Modal
+        transparent
+        visible={isEditDateModalVisible}
+        animationType="slide"
+        onRequestClose={() => setEditDateModalVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setEditDateModalVisible(false)}>
+          <View style={styles.modalContainer}>
+            <TouchableWithoutFeedback>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Select a Date</Text>
+                <FlatList
+                  data={[
+                    ...new Set(
+                      updatedParticipants.flatMap((p) =>
+                        p.history ? p.history.map((h) => h.date) : []
+                      )
+                    ),
+                  ]} // Extract unique dates
+                  keyExtractor={(item, index) => index.toString()}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={styles.dateButton}
+                      onPress={() => {
+                        console.log('Date selected:', item); // Debugging log
+                        setSelectedEditDate(item); // Set the selected date
+                        setEditDateModalVisible(false); // Close Date Selection Modal
+                        setEditValuesModalVisible(true); // Open Edit Values Modal
+                      }}
+                    >
+                      <Text style={styles.dateButtonText}>{formatDate(item)}</Text>
+                    </TouchableOpacity>
+                  )}
+                />
+                <TouchableOpacity
+                  style={styles.modalButton}
+                  onPress={() => setEditDateModalVisible(false)}
+                >
+                  <Text style={styles.modalButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+  
+      {/* Edit Values Modal */}
+      <Modal
+        transparent
+        visible={isEditValuesModalVisible}
+        animationType="slide"
+        onRequestClose={() => setEditValuesModalVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setEditValuesModalVisible(false)}>
+          <View style={styles.modalContainer}>
+            <TouchableWithoutFeedback>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Edit Values for {formatDate(selectedEditDate || '')}</Text>
+                {updatedParticipants.map((participant, index) => {
+                  const historyEntry = participant.history?.find((h) => h.date === selectedEditDate);
+                  if (!historyEntry) return null; // Skip participants without matching history
+
+                  return (
+                    <View key={index} style={styles.participantRow}>
+                      <Text style={styles.participantName}>{participant.name}</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="In"
+                        placeholderTextColor="#888"
+                        value={historyEntry.in?.toString() || ''}
+                        onChangeText={(text) => {
+                          const newIn = parseFloat(text) || 0;
+                          setUpdatedParticipants((prev) =>
+                            prev.map((p) =>
+                              p.name === participant.name
+                                ? {
+                                    ...p,
+                                    history: p.history.map((h) =>
+                                      h.date === selectedEditDate ? { ...h, in: newIn } : h
+                                    ),
+                                  }
+                                : p
+                            )
+                          );
+                        }}
+                      />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Out"
+                        placeholderTextColor="#888"
+                        value={historyEntry.out?.toString() || ''}
+                        onChangeText={(text) => {
+                          const newOut = parseFloat(text) || 0;
+                          setUpdatedParticipants((prev) =>
+                            prev.map((p) =>
+                              p.name === participant.name
+                                ? {
+                                    ...p,
+                                    history: p.history.map((h) =>
+                                      h.date === selectedEditDate ? { ...h, out: newOut } : h
+                                    ),
+                                  }
+                                : p
+                            )
+                          );
+                        }}
+                      />
+                    </View>
+                  );
+                })}
+                <TouchableOpacity
+                  style={styles.modalButton}
+                  onPress={() => setEditValuesModalVisible(false)}
+                >
+                  <Text style={styles.modalButtonText}>Save</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.modalCancelButton}
+                  onPress={() => setEditValuesModalVisible(false)}
+                >
+                  <Text style={styles.modalCancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </View>
-  );  
+  );
+  
 };
 
 const styles = StyleSheet.create({
@@ -431,10 +618,10 @@ const styles = StyleSheet.create({
   },
   dateButton: {
     backgroundColor: '#333',
-    padding: 5,
+    padding: 10,
     borderRadius: 5,
-    marginHorizontal: 5,
-    flex: 0.9,
+    marginVertical: 5,
+    alignItems: 'center',
   },
   dateButtonText: {
     color: '#fff',
@@ -486,6 +673,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     marginBottom: 10,
+    textAlign: 'center',
   },
   modalInput: {
     backgroundColor: '#444',
@@ -509,6 +697,11 @@ const styles = StyleSheet.create({
   },
   modalCancelButton: {
     backgroundColor: '#d9534f',
+    padding: 10,
+    borderRadius: 5,
+    marginTop: 10,
+    width: '100%',
+    alignItems: 'center',
   },
   modalCancelButtonText: {
     color: '#fff',
@@ -562,7 +755,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
   },
-  
 });
+
 
 export default RoomPage;
