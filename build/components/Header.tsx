@@ -7,9 +7,17 @@ interface HeaderProps {
   onBack?: () => void; // Optional back button action
   onUpdate?: () => void; // Optional update button action
   profileImageUrl?: string; // Optional profile image
+  onProfilePress?: () => void; // Action when profile picture is clicked
 }
 
-const Header: React.FC<HeaderProps> = ({ title = '', onMenuPress, onBack, onUpdate, profileImageUrl }) => {
+const Header: React.FC<HeaderProps> = ({ 
+  title = '', 
+  onMenuPress, 
+  onBack, 
+  onUpdate, 
+  profileImageUrl, 
+  onProfilePress 
+}) => {
   return (
     <View style={styles.header}>
       {/* Back Button or Hamburger Menu */}
@@ -37,10 +45,12 @@ const Header: React.FC<HeaderProps> = ({ title = '', onMenuPress, onBack, onUpda
 
       {/* Profile Picture */}
       {profileImageUrl && (
-        <Image
-          source={{ uri: profileImageUrl }}
-          style={styles.profileImage}
-        />
+        <TouchableOpacity onPress={onProfilePress}>
+          <Image
+            source={{ uri: profileImageUrl }}
+            style={styles.profileImage}
+          />
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -66,6 +76,8 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#fff',
+    textAlign: 'center',
+    flex: 1,
   },
   updateButton: {
     fontSize: 16,

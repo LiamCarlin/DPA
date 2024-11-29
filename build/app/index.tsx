@@ -15,7 +15,7 @@ const Index: React.FC = () => {
   >('Login'); // Add 'Profile' to valid screens
   const [rooms, setRooms] = useState<{ name: string; participants: { name: string; winLoss: number }[] }[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<number | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false); // Controls the menu visibility
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,12 +31,16 @@ const Index: React.FC = () => {
     return unsubscribe; // Cleanup on unmount
   }, []);
 
+  const openMenu = () => setMenuOpen(true); // Function to open the menu
+
+  const closeMenu = () => setMenuOpen(false); // Function to close the menu
+
   const navigateTo = (screen: 'Home' | 'ActiveRooms' | 'Room' | 'Profile' | 'Login', roomIndex?: number) => {
     setCurrentScreen(screen);
     if (roomIndex !== undefined) {
       setSelectedRoom(roomIndex);
     }
-    setMenuOpen(false); // Close menu on navigation
+    closeMenu(); // Close menu on navigation
   };
 
   const renderScreen = () => {
@@ -44,14 +48,14 @@ const Index: React.FC = () => {
       case 'Login':
         return <LoginScreen navigateTo={navigateTo} />;
       case 'Home':
-        return <HomeScreen rooms={rooms} navigateTo={navigateTo} openMenu={() => setMenuOpen(true)} />;
+        return <HomeScreen rooms={rooms} navigateTo={navigateTo} openMenu={openMenu} />;
       case 'ActiveRooms':
         return (
           <ActiveRoomsPage
             rooms={rooms}
             setRooms={setRooms}
             navigateTo={navigateTo}
-            openMenu={() => setMenuOpen(true)}
+            openMenu={openMenu}
           />
         );
       case 'Room':
@@ -66,8 +70,8 @@ const Index: React.FC = () => {
             />
           )
         );
-      case 'Profile': // Add case for Profile screen
-        return <ProfileScreen />;
+      case 'Profile':
+        return <ProfileScreen openMenu={openMenu} />; // Pass `openMenu` to ProfileScreen
       default:
         return null;
     }
@@ -86,8 +90,8 @@ const Index: React.FC = () => {
       {menuOpen && (
         <Menu
           isOpen={menuOpen}
-          onClose={() => setMenuOpen(false)}
-          navigate={navigateTo} // Pass navigateTo function
+          onClose={closeMenu} // Pass `closeMenu` to Menu
+          navigate={navigateTo} // Pass navigateTo for menu navigation
         />
       )}
       {renderScreen()}

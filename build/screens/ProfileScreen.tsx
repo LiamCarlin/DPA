@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Header from '../components/Header';
 import {
   View,
   Text,
@@ -10,20 +11,50 @@ import {
   Image,
   Share,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { auth, db } from '../firebaseConfig';
 import { signOut, updatePassword, updateEmail } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
-const ProfileScreen: React.FC = () => {
-  const navigation = useNavigation();
-  const [profilePhoto, setProfilePhoto] = useState('');
+interface ProfileScreenProps {
+  openMenu: () => void; // Pass the `openMenu` function as a prop
+}
+
+const ProfileScreen: React.FC<ProfileScreenProps> = ({ openMenu }) => {
+  const [profilePhoto, setProfilePhoto] = useState<number | null>(null);
   const [showPhotoPicker, setShowPhotoPicker] = useState(false);
   const [lastUsernameChange, setLastUsernameChange] = useState<Date | null>(null);
   const [username, setUsername] = useState('');
   const [remainingDays, setRemainingDays] = useState<number | null>(null);
   const [showHandRankings, setShowHandRankings] = useState(false);
   const userId = auth.currentUser?.uid;
+
+  const profilePictures = [
+    require('../assets/profile-pictures/pic1.png'),
+    require('../assets/profile-pictures/pic2.png'),
+    require('../assets/profile-pictures/pic3.png'),
+    require('../assets/profile-pictures/pic4.png'),
+    require('../assets/profile-pictures/pic5.png'),
+    require('../assets/profile-pictures/pic6.png'),
+    require('../assets/profile-pictures/pic7.png'),
+    require('../assets/profile-pictures/pic8.png'),
+    require('../assets/profile-pictures/pic9.png'),
+    require('../assets/profile-pictures/pic10.png'),
+    require('../assets/profile-pictures/pic11.png'),
+    require('../assets/profile-pictures/pic12.png'),
+    require('../assets/profile-pictures/pic13.png'),
+    require('../assets/profile-pictures/pic14.png'),
+    require('../assets/profile-pictures/pic15.png'),
+    require('../assets/profile-pictures/pic16.png'),
+    require('../assets/profile-pictures/pic17.png'),
+    require('../assets/profile-pictures/pic18.png'),
+    require('../assets/profile-pictures/pic19.png'),
+    require('../assets/profile-pictures/pic20.png'),
+    require('../assets/profile-pictures/pic21.png'),
+    require('../assets/profile-pictures/pic22.png'),
+    require('../assets/profile-pictures/pic23.png'),
+    require('../assets/profile-pictures/pic24.png'),
+    require('../assets/profile-pictures/pic25.png'),
+  ];
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -32,7 +63,7 @@ const ProfileScreen: React.FC = () => {
         const docSnap = await getDoc(userDoc);
         if (docSnap.exists()) {
           const data = docSnap.data();
-          setProfilePhoto(data.profilePhoto || '');
+          setProfilePhoto(data.profilePhoto ?? null);
           setUsername(data.username || '');
           setLastUsernameChange(data.lastUsernameChange ? new Date(data.lastUsernameChange) : null);
         }
@@ -50,22 +81,22 @@ const ProfileScreen: React.FC = () => {
     }
   }, [lastUsernameChange]);
 
-  const handleProfilePhotoChange = async (photo: string) => {
+  const handleProfilePhotoChange = async (photoIndex: number) => {
     Alert.alert('Confirm', 'Do you want to use this photo?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Yes',
         onPress: async () => {
-          try {
-            setProfilePhoto(photo);
-            if (userId) {
-              await setDoc(doc(db, 'users', userId), { profilePhoto: photo }, { merge: true });
-              Alert.alert('Success', 'Profile photo updated successfully!');
-            }
-            setShowPhotoPicker(false);
-          } catch (error) {
-            Alert.alert('Error', 'Failed to update profile photo. Please try again.');
+          setProfilePhoto(photoIndex);
+          if (userId) {
+            await setDoc(
+              doc(db, 'users', userId),
+              { profilePhoto: photoIndex },
+              { merge: true }
+            );
+            Alert.alert('Success', 'Profile photo updated successfully!');
           }
+          setShowPhotoPicker(false);
         },
       },
     ]);
@@ -122,34 +153,6 @@ const ProfileScreen: React.FC = () => {
     });
   };
 
-  const profilePictures = [
-    require('../assets/profile-pictures/pic1.png'),
-    require('../assets/profile-pictures/pic2.png'),
-    require('../assets/profile-pictures/pic3.png'),
-    require('../assets/profile-pictures/pic4.png'),
-    require('../assets/profile-pictures/pic5.png'),
-    require('../assets/profile-pictures/pic6.png'),
-    require('../assets/profile-pictures/pic7.png'),
-    require('../assets/profile-pictures/pic8.png'),
-    require('../assets/profile-pictures/pic9.png'),
-    require('../assets/profile-pictures/pic10.png'),
-    require('../assets/profile-pictures/pic11.png'),
-    require('../assets/profile-pictures/pic12.png'),
-    require('../assets/profile-pictures/pic13.png'),
-    require('../assets/profile-pictures/pic14.png'),
-    require('../assets/profile-pictures/pic15.png'),
-    require('../assets/profile-pictures/pic16.png'),
-    require('../assets/profile-pictures/pic17.png'),
-    require('../assets/profile-pictures/pic18.png'),
-    require('../assets/profile-pictures/pic19.png'),
-    require('../assets/profile-pictures/pic20.png'),
-    require('../assets/profile-pictures/pic21.png'),
-    require('../assets/profile-pictures/pic22.png'),
-    require('../assets/profile-pictures/pic23.png'),
-    require('../assets/profile-pictures/pic24.png'),
-    require('../assets/profile-pictures/pic25.png'),
-  ];
-
   const pokerHandRankings = [
     'Royal Flush',
     'Straight Flush',
@@ -165,15 +168,22 @@ const ProfileScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity onPress={() => navigation.openDrawer()} style={styles.hamburgerMenu}>
-        <Text style={styles.hamburgerMenuText}>☰</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.title}>Profile</Text>
+      {/* Custom Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={openMenu} style={styles.hamburgerButton}>
+          <Text style={styles.hamburgerText}>☰</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Profile</Text>
+        <View style={styles.placeholder} /> {/* Placeholder for centering */}
+      </View>
 
       <TouchableOpacity onPress={() => setShowPhotoPicker(true)}>
         <Image
-          source={profilePhoto ? { uri: profilePhoto } : require('../assets/profile-placeholder.png')}
+          source={
+            profilePhoto !== null
+              ? profilePictures[profilePhoto]
+              : require('../assets/profile-placeholder.png')
+          }
           style={styles.profileImage}
         />
         <Text style={styles.changePhotoText}>Change Profile Photo</Text>
@@ -211,8 +221,8 @@ const ProfileScreen: React.FC = () => {
             data={profilePictures}
             keyExtractor={(_, index) => index.toString()}
             numColumns={2}
-            renderItem={({ item }) => (
-              <TouchableOpacity onPress={() => handleProfilePhotoChange(item)}>
+            renderItem={({ item, index }) => (
+              <TouchableOpacity onPress={() => handleProfilePhotoChange(index)}>
                 <Image source={item} style={styles.modalImage} />
               </TouchableOpacity>
             )}
@@ -254,19 +264,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
   },
-  hamburgerMenu: {
-    position: 'absolute',
-    top: 40,
-    left: 20,
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
   },
-  hamburgerMenuText: {
+  hamburgerButton: {
+    paddingHorizontal: 10,
+  },
+  hamburgerText: {
     fontSize: 24,
     color: '#fff',
   },
-  title: {
-    fontSize: 24,
+  headerTitle: {
     color: '#fff',
-    marginBottom: 20,
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    flex: 1,
+  },
+  placeholder: {
+    width: 24, // Matches the width of the hamburger icon for balance
   },
   profileImage: {
     width: 100,

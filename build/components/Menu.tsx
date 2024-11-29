@@ -28,10 +28,7 @@ const Menu: React.FC<MenuProps> = ({ isOpen, onClose, navigate }) => {
         <TouchableOpacity onPress={() => handleNavigation('ActiveRooms')}>
           <Text style={styles.menuItem}>Active Rooms</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => handleNavigation('Room')}>
-          <Text style={styles.menuItem}>Room (Example)</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => handleNavigation('Profile')}> {/* Add Profile */}
+        <TouchableOpacity onPress={() => handleNavigation('Profile')}> 
           <Text style={styles.menuItem}>Profile</Text>
         </TouchableOpacity>
       </View>

@@ -1,20 +1,75 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import Header from '../components/Header';
+import { auth, db } from '../firebaseConfig';
+import { doc, getDoc } from 'firebase/firestore';
 
 interface HomeScreenProps {
   rooms: { name: string; participants: { name: string; winLoss: number }[] }[];
-  navigateTo: (screen: 'Home' | 'ActiveRooms' | 'Room', roomIndex?: number) => void;
+  navigateTo: (screen: 'Home' | 'ActiveRooms' | 'Room' | 'Profile', roomIndex?: number) => void;
   openMenu: () => void;
 }
 
 const HomeScreen: React.FC<HomeScreenProps> = ({ rooms, navigateTo, openMenu }) => {
+  const [profilePhotoIndex, setProfilePhotoIndex] = useState<number | null>(null); // Store profile photo as an index
+  const userId = auth.currentUser?.uid;
+
+  const profilePictures = [
+    require('../assets/profile-pictures/pic1.png'),
+    require('../assets/profile-pictures/pic2.png'),
+    require('../assets/profile-pictures/pic3.png'),
+    require('../assets/profile-pictures/pic4.png'),
+    require('../assets/profile-pictures/pic5.png'),
+    require('../assets/profile-pictures/pic6.png'),
+    require('../assets/profile-pictures/pic7.png'),
+    require('../assets/profile-pictures/pic8.png'),
+    require('../assets/profile-pictures/pic9.png'),
+    require('../assets/profile-pictures/pic10.png'),
+    require('../assets/profile-pictures/pic11.png'),
+    require('../assets/profile-pictures/pic12.png'),
+    require('../assets/profile-pictures/pic13.png'),
+    require('../assets/profile-pictures/pic14.png'),
+    require('../assets/profile-pictures/pic15.png'),
+    require('../assets/profile-pictures/pic16.png'),
+    require('../assets/profile-pictures/pic17.png'),
+    require('../assets/profile-pictures/pic18.png'),
+    require('../assets/profile-pictures/pic19.png'),
+    require('../assets/profile-pictures/pic20.png'),
+    require('../assets/profile-pictures/pic21.png'),
+    require('../assets/profile-pictures/pic22.png'),
+    require('../assets/profile-pictures/pic23.png'),
+    require('../assets/profile-pictures/pic24.png'),
+    require('../assets/profile-pictures/pic25.png'),
+  ];
+
+  useEffect(() => {
+    // Fetch the profile photo index from the database
+    const fetchProfilePhoto = async () => {
+      if (userId) {
+        const userDoc = doc(db, 'users', userId);
+        const docSnap = await getDoc(userDoc);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setProfilePhotoIndex(data.profilePhoto ?? null); // Set the profile photo index
+        }
+      }
+    };
+    fetchProfilePhoto();
+  }, [userId]);
+
+  const resolvedProfilePhoto =
+    profilePhotoIndex !== null && profilePhotoIndex >= 0 && profilePhotoIndex < profilePictures.length
+      ? profilePictures[profilePhotoIndex]
+      : require('../assets/profile-placeholder.png'); // Default placeholder image
+
   return (
     <View style={styles.container}>
+      {/* Pass profile photo and onPress handler to Header */}
       <Header
         title="DPA"
         onMenuPress={openMenu}
-        profileImageUrl="https://via.placeholder.com/30"
+        profileImageUrl={resolvedProfilePhoto} // Resolved profile photo
+        onProfilePress={() => navigateTo('Profile')} // Navigate to ProfileScreen on press
       />
 
       <View style={styles.buttonsContainer}>
