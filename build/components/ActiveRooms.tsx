@@ -7,7 +7,6 @@ import {
   Modal,
   TextInput,
   FlatList,
-  Button,
 } from 'react-native';
 
 interface Room {
@@ -95,7 +94,9 @@ const ActiveRooms: React.FC = () => {
                 value={currentParticipant}
                 onChangeText={setCurrentParticipant}
               />
-              <Button title="Add" onPress={handleAddParticipant} />
+              <TouchableOpacity onPress={handleAddParticipant}>
+                <Text style={styles.buttonText}>Add</Text>
+              </TouchableOpacity>
             </View>
 
             {/* Display Participants */}
@@ -109,8 +110,12 @@ const ActiveRooms: React.FC = () => {
 
             {/* Modal Actions */}
             <View style={styles.modalActions}>
-              <Button title="Cancel" onPress={() => setModalVisible(false)} />
-              <Button title="Add Room" onPress={handleAddRoom} />
+              <TouchableOpacity onPress={() => setModalVisible(false)}>
+                <Text style={styles.buttonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleAddRoom}>
+                <Text style={styles.buttonText}>Add Room</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -196,6 +201,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 10,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    padding: 10,
   },
 });
 

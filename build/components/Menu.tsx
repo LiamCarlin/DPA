@@ -1,26 +1,31 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 
+type DrawerParamList = {
+  Profile: undefined;
+  Home: undefined;
+  ActiveRooms: undefined;
+  Room: { roomIndex: number } | undefined;
+  Login: undefined;
+};
+
 interface MenuProps {
   isOpen: boolean;
   onClose: () => void;
-  navigate: (screen: 'Home' | 'ActiveRooms' | 'Room' | 'Profile' | 'Login', roomIndex?: number) => void;
+  navigate: (screen: keyof DrawerParamList) => void;
 }
 
 const Menu: React.FC<MenuProps> = ({ isOpen, onClose, navigate }) => {
-  if (!isOpen) return null; // If menu is not open, don't render anything.
+  if (!isOpen) return null;
 
-  const handleNavigation = (screen: 'Home' | 'ActiveRooms' | 'Room' | 'Profile' | 'Login') => {
-    navigate(screen); // Trigger navigation
-    onClose(); // Close the menu after navigation
+  const handleNavigation = (screen: keyof DrawerParamList) => {
+    navigate(screen);
+    onClose();
   };
 
   return (
     <>
-      {/* Backdrop to close the menu when clicked outside */}
       <TouchableOpacity style={styles.backdrop} onPress={onClose} />
-
-      {/* Menu Content */}
       <View style={styles.container}>
         <TouchableOpacity onPress={() => handleNavigation('Home')}>
           <Text style={styles.menuItem}>Home</Text>

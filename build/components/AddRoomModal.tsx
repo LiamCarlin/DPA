@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,24 +6,39 @@ import {
   Modal,
   TextInput,
   FlatList,
-  Button,
   TouchableOpacity,
 } from 'react-native';
+import { Participant } from '../types';
 
 interface AddRoomModalProps {
   visible: boolean;
   onClose: () => void;
-  onAddRoom: (room: { name: string; participants: { name: string; winLoss: number }[] }) => void;
+  onAddRoom: (room: { name: string; participants: Participant[] }) => void;
+  username: string;
 }
 
-const AddRoomModal: React.FC<AddRoomModalProps> = ({ visible, onClose, onAddRoom }) => {
+const AddRoomModal: React.FC<AddRoomModalProps> = ({ visible, onClose, onAddRoom, username }) => {
   const [roomName, setRoomName] = useState('');
-  const [participants, setParticipants] = useState<{ name: string; winLoss: number }[]>([]);
+  const [participants, setParticipants] = useState<Participant[]>([]);
   const [currentParticipant, setCurrentParticipant] = useState('');
+
+  useEffect(() => {
+    if (visible && username && participants.length === 0) {
+      setParticipants([{
+        name: username,
+        winLoss: 0,
+        history: []
+      }]);
+    }
+  }, [visible, username]);
 
   const handleAddParticipant = () => {
     if (currentParticipant.trim()) {
-      setParticipants((prev) => [...prev, { name: currentParticipant.trim(), winLoss: 0 }]);
+      setParticipants((prev) => [...prev, { 
+        name: currentParticipant.trim(), 
+        winLoss: 0,
+        history: []
+      }]);
       setCurrentParticipant('');
     }
   };
@@ -62,7 +77,9 @@ const AddRoomModal: React.FC<AddRoomModalProps> = ({ visible, onClose, onAddRoom
               value={currentParticipant}
               onChangeText={setCurrentParticipant}
             />
-            <Button title="Add" onPress={handleAddParticipant} />
+            <TouchableOpacity onPress={handleAddParticipant}>
+              <Text style={styles.addButtonText}>Add</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Display Participants */}

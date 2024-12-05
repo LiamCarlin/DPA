@@ -8,12 +8,13 @@ import LoginScreen from '../screens/LoginScreen';
 import Menu from '../components/Menu';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebaseConfig';
+import { Participant } from '../types';
 
 const Index: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<
     'Home' | 'ActiveRooms' | 'Room' | 'Profile' | 'Login'
   >('Login'); // Add 'Profile' to valid screens
-  const [rooms, setRooms] = useState<{ name: string; participants: { name: string; winLoss: number }[] }[]>([]);
+  const [rooms, setRooms] = useState<{ name: string; participants: Participant[] }[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false); // Controls the menu visibility
   const [loading, setLoading] = useState(true);

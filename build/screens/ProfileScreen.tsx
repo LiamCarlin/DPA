@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import Header from '../components/Header';
 import {
   View,
   Text,
@@ -10,23 +9,39 @@ import {
   FlatList,
   Image,
   Share,
+  TextInput,
 } from 'react-native';
 import { auth, db } from '../firebaseConfig';
 import { signOut, updatePassword, updateEmail } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { useNavigation, DrawerActions } from '@react-navigation/native';
+import { DrawerNavigationProp } from '@react-navigation/drawer';
+import Header from '../components/Header';
 
-interface ProfileScreenProps {
-  openMenu: () => void; // Pass the `openMenu` function as a prop
-}
+// Define the drawer param list type
+type DrawerParamList = {
+  Profile: undefined;
+  Home: undefined;
+  ActiveRooms: undefined;
+  Room: { roomIndex: number } | undefined;
+  Login: undefined;
+};
 
-const ProfileScreen: React.FC<ProfileScreenProps> = ({ openMenu }) => {
+const ProfileScreen: React.FC = () => {
+  const navigation = useNavigation<DrawerNavigationProp<DrawerParamList>>();
   const [profilePhoto, setProfilePhoto] = useState<number | null>(null);
   const [showPhotoPicker, setShowPhotoPicker] = useState(false);
+  const [showUsernameModal, setShowUsernameModal] = useState(false);
+  const [newUsername, setNewUsername] = useState('');
   const [lastUsernameChange, setLastUsernameChange] = useState<Date | null>(null);
   const [username, setUsername] = useState('');
   const [remainingDays, setRemainingDays] = useState<number | null>(null);
   const [showHandRankings, setShowHandRankings] = useState(false);
   const userId = auth.currentUser?.uid;
+
+  const handleMenuPress = () => {
+    navigation.dispatch(DrawerActions.toggleDrawer());
+  };
 
   const profilePictures = [
     require('../assets/profile-pictures/pic1.png'),
@@ -59,13 +74,27 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ openMenu }) => {
   useEffect(() => {
     const fetchUserData = async () => {
       if (userId) {
-        const userDoc = doc(db, 'users', userId);
-        const docSnap = await getDoc(userDoc);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setProfilePhoto(data.profilePhoto ?? null);
-          setUsername(data.username || '');
-          setLastUsernameChange(data.lastUsernameChange ? new Date(data.lastUsernameChange) : null);
+        try {
+          // Fetch user data
+          const userDoc = doc(db, 'users', userId);
+          const docSnap = await getDoc(userDoc);
+          
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setProfilePhoto(data.profilePhoto ?? null);
+            setUsername(data.username || '');
+            setLastUsernameChange(data.lastUsernameChange ? new Date(data.lastUsernameChange) : null);
+          } else {
+            // Create initial user document if it doesn't exist
+            await setDoc(doc(db, 'users', userId), {
+              profilePhoto: null,
+              username: '',
+              lastUsernameChange: null,
+              createdAt: new Date().toISOString()
+            });
+          }
+        } catch (error) {
+          Alert.alert('Error', 'Failed to fetch user data');
         }
       }
     };
@@ -82,50 +111,83 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ openMenu }) => {
   }, [lastUsernameChange]);
 
   const handleProfilePhotoChange = async (photoIndex: number) => {
+    if (!userId) return;
+
     Alert.alert('Confirm', 'Do you want to use this photo?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Yes',
         onPress: async () => {
-          setProfilePhoto(photoIndex);
-          if (userId) {
+          try {
             await setDoc(
               doc(db, 'users', userId),
-              { profilePhoto: photoIndex },
+              { 
+                profilePhoto: photoIndex,
+                updatedAt: new Date().toISOString()
+              },
               { merge: true }
             );
+            setProfilePhoto(photoIndex);
+            setShowPhotoPicker(false);
             Alert.alert('Success', 'Profile photo updated successfully!');
+          } catch (error) {
+            Alert.alert('Error', 'Failed to update profile photo');
           }
-          setShowPhotoPicker(false);
         },
       },
     ]);
   };
 
   const handleChangeUsername = async () => {
+    if (!userId) return;
     if (remainingDays !== null) {
       Alert.alert('Wait', `You can change your username in ${remainingDays} days.`);
       return;
     }
 
-    const newUsername = prompt('Enter a new username:');
-    if (newUsername) {
-      const usernameDoc = doc(db, 'usernames', newUsername);
+    setShowUsernameModal(true);
+  };
+
+  const submitUsername = async () => {
+    if (!newUsername || !userId) return;
+
+    try {
+      // Check if username is already taken
+      const usernameDoc = doc(db, 'usernames', newUsername.toLowerCase());
       const usernameSnap = await getDoc(usernameDoc);
+      
       if (usernameSnap.exists()) {
         Alert.alert('Error', 'Username already taken.');
         return;
       }
-      if (userId) {
-        await setDoc(
-          doc(db, 'users', userId),
-          { username: newUsername, lastUsernameChange: new Date().toISOString() },
-          { merge: true }
-        );
-        setUsername(newUsername);
-        setLastUsernameChange(new Date());
-        Alert.alert('Success', 'Username updated successfully!');
+
+      // Delete old username document if it exists
+      if (username) {
+        await setDoc(doc(db, 'usernames', username.toLowerCase()), {});
       }
+
+      // Create new username document
+      await setDoc(usernameDoc, { userId });
+
+      // Update user document
+      const userDocRef = doc(db, 'users', userId);
+      await setDoc(
+        userDocRef,
+        { 
+          username: newUsername,
+          lastUsernameChange: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        { merge: true }
+      );
+
+      setUsername(newUsername);
+      setLastUsernameChange(new Date());
+      setShowUsernameModal(false);
+      setNewUsername('');
+      Alert.alert('Success', 'Username updated successfully!');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update username');
     }
   };
 
@@ -138,12 +200,28 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ openMenu }) => {
     }
   };
 
-  const handleChangeEmail = () => {
+  const handleChangeEmail = async () => {
     const newEmail = prompt('Enter a new email:');
-    if (newEmail) {
-      updateEmail(auth.currentUser!, newEmail)
-        .then(() => Alert.alert('Success', 'Email updated successfully!'))
-        .catch((error) => Alert.alert('Error', error.message));
+    if (!newEmail || !auth.currentUser) return;
+
+    try {
+      await updateEmail(auth.currentUser, newEmail);
+      
+      // Update email in users collection
+      if (userId) {
+        await setDoc(
+          doc(db, 'users', userId),
+          { 
+            email: newEmail,
+            updatedAt: new Date().toISOString()
+          },
+          { merge: true }
+        );
+      }
+      
+      Alert.alert('Success', 'Email updated successfully!');
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
     }
   };
 
@@ -151,6 +229,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ openMenu }) => {
     Share.share({
       message: 'Check out this amazing poker app!',
     });
+  };
+
+  const handleSignOut = () => {
+    signOut(auth)
+      .then(() => Alert.alert('Signed Out', 'You have been successfully signed out.'))
+      .catch((error) => Alert.alert('Error', error.message));
   };
 
   const pokerHandRankings = [
@@ -168,51 +252,53 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ openMenu }) => {
 
   return (
     <View style={styles.container}>
-      {/* Custom Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={openMenu} style={styles.hamburgerButton}>
-          <Text style={styles.hamburgerText}>☰</Text>
+      <Header 
+        title="Profile"
+        onMenuPress={handleMenuPress}
+      />
+      <View style={styles.contentContainer}>
+        <TouchableOpacity onPress={() => setShowPhotoPicker(true)}>
+          <Image
+            source={
+              profilePhoto !== null
+                ? profilePictures[profilePhoto]
+                : require('../assets/profile-placeholder.png')
+            }
+            style={styles.profileImage}
+          />
+          <Text style={styles.changePhotoText}>Change Profile Photo</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profile</Text>
-        <View style={styles.placeholder} /> {/* Placeholder for centering */}
+
+        <Text style={styles.usernameText}>Username: {username}</Text>
+        <TouchableOpacity
+          onPress={handleChangeUsername}
+          style={[styles.button, remainingDays !== null && styles.disabledButton]}
+          disabled={remainingDays !== null}
+        >
+          <Text style={styles.buttonText}>Change Username</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={handleChangePassword} style={styles.button}>
+          <Text style={styles.buttonText}>Change Password</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={handleChangeEmail} style={styles.button}>
+          <Text style={styles.buttonText}>Change Email</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={handleShareApp} style={styles.button}>
+          <Text style={styles.buttonText}>Share the App</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={() => setShowHandRankings(true)} style={styles.button}>
+          <Text style={styles.buttonText}>Hand Rankings</Text>
+        </TouchableOpacity>
+
+        {/* Sign Out Button */}
+        <TouchableOpacity onPress={handleSignOut} style={styles.signOutButton}>
+          <Text style={styles.signOutButtonText}>Sign Out</Text>
+        </TouchableOpacity>
       </View>
-
-      <TouchableOpacity onPress={() => setShowPhotoPicker(true)}>
-        <Image
-          source={
-            profilePhoto !== null
-              ? profilePictures[profilePhoto]
-              : require('../assets/profile-placeholder.png')
-          }
-          style={styles.profileImage}
-        />
-        <Text style={styles.changePhotoText}>Change Profile Photo</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.usernameText}>Username: {username}</Text>
-      <TouchableOpacity
-        onPress={handleChangeUsername}
-        style={[styles.button, remainingDays !== null && styles.disabledButton]}
-        disabled={remainingDays !== null}
-      >
-        <Text style={styles.buttonText}>Change Username</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity onPress={handleChangePassword} style={styles.button}>
-        <Text style={styles.buttonText}>Change Password</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity onPress={handleChangeEmail} style={styles.button}>
-        <Text style={styles.buttonText}>Change Email</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity onPress={handleShareApp} style={styles.button}>
-        <Text style={styles.buttonText}>Share the App</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity onPress={() => setShowHandRankings(true)} style={styles.button}>
-        <Text style={styles.buttonText}>Hand Rankings</Text>
-      </TouchableOpacity>
 
       {/* Profile Picture Picker Modal */}
       <Modal visible={showPhotoPicker} transparent animationType="slide">
@@ -253,6 +339,41 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ openMenu }) => {
           </TouchableOpacity>
         </View>
       </Modal>
+
+      {/* Username Change Modal */}
+      <Modal visible={showUsernameModal} transparent animationType="slide">
+        <View style={styles.modalContainer}>
+          <View style={styles.usernameModalContent}>
+            <Text style={styles.modalTitle}>Change Username</Text>
+            <TextInput
+              style={styles.usernameInput}
+              placeholder="Enter new username"
+              placeholderTextColor="#666"
+              value={newUsername}
+              onChangeText={setNewUsername}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <View style={styles.modalButtonsContainer}>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowUsernameModal(false);
+                  setNewUsername('');
+                }}
+                style={[styles.modalButton, styles.cancelButton]}
+              >
+                <Text style={styles.modalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={submitUsername}
+                style={[styles.modalButton, styles.submitButton]}
+              >
+                <Text style={styles.modalButtonText}>Submit</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -261,34 +382,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#121212',
+  },
+  contentContainer: {
+    flex: 1,
     alignItems: 'center',
     padding: 20,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
-  },
-  hamburgerButton: {
-    paddingHorizontal: 10,
-  },
-  hamburgerText: {
-    fontSize: 24,
-    color: '#fff',
-  },
-  headerTitle: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    flex: 1,
-  },
-  placeholder: {
-    width: 24, // Matches the width of the hamburger icon for balance
+    paddingTop: 10,
   },
   profileImage: {
     width: 100,
@@ -299,6 +398,7 @@ const styles = StyleSheet.create({
   changePhotoText: {
     color: '#4ADE80',
     textDecorationLine: 'underline',
+    textAlign: 'center',
   },
   usernameText: {
     color: '#fff',
@@ -317,6 +417,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#555',
   },
   buttonText: {
+    color: '#fff',
+    fontSize: 16,
+  },
+  signOutButton: {
+    width: '80%',
+    padding: 10,
+    backgroundColor: '#FF4C4C',
+    borderRadius: 5,
+    alignItems: 'center',
+    marginVertical: 5,
+  },
+  signOutButtonText: {
     color: '#fff',
     fontSize: 16,
   },
@@ -352,6 +464,41 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     marginVertical: 5,
+  },
+  usernameModalContent: {
+    backgroundColor: '#1E1E1E',
+    padding: 20,
+    borderRadius: 10,
+    width: '90%',
+  },
+  usernameInput: {
+    backgroundColor: '#2C2C2C',
+    color: '#fff',
+    padding: 10,
+    borderRadius: 5,
+    marginVertical: 15,
+    fontSize: 16,
+  },
+  modalButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  modalButton: {
+    padding: 10,
+    borderRadius: 5,
+    width: '45%',
+  },
+  cancelButton: {
+    backgroundColor: '#FF4C4C',
+  },
+  submitButton: {
+    backgroundColor: '#4ADE80',
+  },
+  modalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    textAlign: 'center',
   },
 });
 

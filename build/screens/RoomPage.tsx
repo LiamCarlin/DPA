@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, TextInput, Text, TouchableOpacity, Modal, Alert, ToastAndroid, Dimensions, TouchableWithoutFeedback } from 'react-native';
-import * as d3Shape from 'd3-shape';
-import { scaleLinear, scalePoint } from 'd3-scale';
-import Svg, { Line, Path, G, Circle, Text as SvgText, Rect } from 'react-native-svg';
+import { View, StyleSheet, FlatList, TextInput, Text, TouchableOpacity, Modal, Alert, ToastAndroid, TouchableWithoutFeedback } from 'react-native';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import Header from '../components/Header';
+import RoomGraph from '../components/RoomGraph';
+import { db, auth } from '../firebaseConfig';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
 interface Participant {
   name: string;
@@ -40,9 +40,32 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
   const [isEditValuesModalVisible, setEditValuesModalVisible] = useState(false);
   const [selectedEditDate, setSelectedEditDate] = useState<string | null>(null);
 
-  const { width } = Dimensions.get('window');
-  const graphWidth = width - 40;
-  const graphHeight = 250;
+  const userId = auth.currentUser?.uid;
+
+  useEffect(() => {
+    const loadInitialData = async () => {
+      if (userId) {
+        try {
+          const userDoc = doc(db, 'users', userId);
+          const userSnap = await getDoc(userDoc);
+          
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
+            const currentRoom = userData.rooms[roomIndex];
+            
+            if (currentRoom) {
+              setUpdatedParticipants(currentRoom.participants);
+            }
+          }
+        } catch (error) {
+          console.error('Error loading initial data:', error);
+          ToastAndroid.show('Error loading data. Please try again.', ToastAndroid.SHORT);
+        }
+      }
+    };
+
+    loadInitialData();
+  }, [userId, roomIndex]);
 
   useEffect(() => {
     if (isUpdating) {
@@ -82,34 +105,76 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
     }
   };
 
-  const handleConfirmUpdate = () => {
-    const newParticipants = updatedParticipants.map((participant) => {
-      const amountIn = parseFloat(participant.in || '0');
-      const amountOut = parseFloat(participant.out || '0');
-  
-      const updatedHistory = [
-        ...(participant.history || []),
-        {
-          date: participant.selectedDate!,
-          amount: amountOut - amountIn,
-          in: amountIn, // Add `in`
-          out: amountOut, // Add `out`
-        },
-      ];
-  
-      return {
-        ...participant,
-        winLoss: updatedHistory.reduce((acc, entry) => acc + entry.amount, 0),
-        history: updatedHistory,
-        in: undefined,
-        out: undefined,
-        selectedDate: undefined,
-      };
-    });
-  
-    setUpdatedParticipants(newParticipants);
-    setIsUpdating(false);
-    ToastAndroid.show('Updates confirmed successfully!', ToastAndroid.SHORT);
+  const handleConfirmUpdate = async () => {
+    try {
+      // Create new participants array with updated values
+      const newParticipants = updatedParticipants.map((participant) => {
+        const amountIn = parseFloat(participant.in || '0');
+        const amountOut = parseFloat(participant.out || '0');
+        const currentDate = participant.selectedDate || new Date().toISOString().slice(0, 10);
+
+        const updatedHistory = [
+          ...(participant.history || []),
+          {
+            date: currentDate,
+            amount: amountOut - amountIn,
+            in: amountIn || 0,
+            out: amountOut || 0
+          },
+        ];
+
+        // Calculate new win/loss total
+        const newWinLoss = updatedHistory.reduce((acc, entry) => acc + entry.amount, 0);
+
+        // Return clean participant object
+        return {
+          name: participant.name,
+          winLoss: newWinLoss,
+          history: updatedHistory
+        };
+      });
+
+      // Save to Firestore
+      if (userId) {
+        const userDoc = doc(db, 'users', userId);
+        const userSnap = await getDoc(userDoc);
+        
+        if (userSnap.exists()) {
+          // Get current rooms array
+          const currentData = userSnap.data();
+          const updatedRooms = [...currentData.rooms];
+          
+          // Update the specific room
+          updatedRooms[roomIndex] = {
+            ...updatedRooms[roomIndex],
+            name: room.name,
+            participants: newParticipants
+          };
+
+          // Update Firestore
+          await updateDoc(userDoc, {
+            rooms: updatedRooms
+          });
+
+          // Update local state
+          setRooms(updatedRooms);
+          
+          // Update the local participants state
+          setUpdatedParticipants(newParticipants.map(p => ({
+            ...p,
+            in: undefined,
+            out: undefined,
+            selectedDate: undefined
+          })));
+
+          setIsUpdating(false);
+          ToastAndroid.show('Updates confirmed successfully!', ToastAndroid.SHORT);
+        }
+      }
+    } catch (error) {
+      console.error('Error updating document:', error);
+      ToastAndroid.show('Error updating data. Please try again.', ToastAndroid.SHORT);
+    }
   };
   
 
@@ -155,133 +220,10 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
   };
   
 
-  const renderGraph = () => {
-    if (!updatedParticipants || updatedParticipants.length === 0) {
-      return (
-        <View style={styles.graphContainer}>
-          <Text style={styles.noDataText}>No data available to display the graph.</Text>
-        </View>
-      );
-    }
-
-    const data = updatedParticipants.map((participant) =>
-      (participant.history || []).map((entry) => ({ date: entry.date, amount: entry.amount }))
-    );
-
-    const flatData = data.flat();
-    const uniqueDates = [...new Set(flatData.map((d) => d.date))].sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
-    const minAmount = Math.min(...flatData.map((d) => d.amount), 0);
-    const maxAmount = Math.max(...flatData.map((d) => d.amount), 1);
-
-    if (flatData.length === 0) {
-      return (
-        <View style={styles.graphContainer}>
-          <Text style={styles.noDataText}>No data available to display the graph.</Text>
-        </View>
-      );
-    }
-
-    const xScale = scalePoint()
-      .domain(uniqueDates)
-      .range([40, graphWidth - 40]);
-
-    const yScale = scaleLinear()
-      .domain([minAmount - 10, maxAmount + 10])
-      .range([graphHeight - 40, 40]);
-
-    const linePaths = updatedParticipants.map((participant, index) => {
-      const lineGenerator = d3Shape
-        .line<{ date: string; amount: number }>()
-        .x((d) => xScale(d.date)!)
-        .y((d) => yScale(d.amount))
-        .curve(d3Shape.curveBasis);
-
-      return {
-        path: lineGenerator(participant.history || []) || '',
-        color: `hsl(${(index * 60) % 360}, 70%, 60%)`,
-        data: participant.history || [],
-      };
-    });
-
-    return (
-      <View style={styles.graphContainer}>
-        <Svg width={graphWidth} height={graphHeight}>
-          <Rect x={0} y={0} width={graphWidth} height={graphHeight} stroke="white" strokeWidth={2} fill="none" />
-          {uniqueDates.map((date, i) => (
-            <Line
-              key={`grid-line-${i}`}
-              x1={xScale(date)!}
-              x2={xScale(date)!}
-              y1={graphHeight - 40}
-              y2={40}
-              stroke="lightgray"
-              strokeWidth={0.5}
-            />
-          ))}
-          {yScale.ticks(5).map((tick, i) => (
-            <Line
-              key={`horizontal-grid-line-${i}`}
-              x1={40}
-              x2={graphWidth - 40}
-              y1={yScale(tick)}
-              y2={yScale(tick)}
-              stroke="lightgray"
-              strokeWidth={0.5}
-            />
-          ))}
-          {linePaths.map((line, i) => (
-            <Path key={`line-${i}`} d={line.path} stroke={line.color} strokeWidth={2} fill="none" />
-          ))}
-          {linePaths.map((line, i) =>
-            line.data.map((point, j) => (
-              <Circle
-                key={`point-${i}-${j}`}
-                cx={xScale(point.date)}
-                cy={yScale(point.amount)}
-                r={6}
-                fill={line.color}
-                onPress={() =>
-                  setTooltip({
-                    x: xScale(point.date)!,
-                    y: yScale(point.amount),
-                    value: point.amount,
-                    date: formatDate(point.date),
-                  })
-                }
-              />
-            ))
-          )}
-          {tooltip && (
-            <G>
-              <Rect
-                x={tooltip.x - 50}
-                y={tooltip.y - 30}
-                width={100}
-                height={30}
-                fill="black"
-                rx={5}
-                ry={5}
-              />
-              <SvgText
-                x={tooltip.x}
-                y={tooltip.y - 15}
-                fontSize="12"
-                fill="white"
-                textAnchor="middle"
-              >
-                {`${tooltip.date}: $${tooltip.value.toFixed(2)}`}
-              </SvgText>
-            </G>
-          )}
-        </Svg>
-      </View>
-    );
-  };
-
   return (
     <View style={styles.container}>
       <Header title={room.name} onBack={() => navigateTo('ActiveRooms')} onUpdate={() => setIsUpdating(!isUpdating)} />
-      {renderGraph()}
+      <RoomGraph participants={updatedParticipants} />
       <FlatList
         data={updatedParticipants}
         keyExtractor={(item, index) => index.toString()}
@@ -569,17 +511,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#121212',
     padding: 20,
   },
-  graphContainer: {
-    marginTop: 20,
-    height: 250,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#fff',
-    borderRadius: 5,
-    padding: 10,
-    backgroundColor: '#1e1e1e',
-  },
   participantRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -732,12 +663,6 @@ const styles = StyleSheet.create({
   confirmButtonText: {
     color: '#fff',
     fontWeight: 'bold',
-  },
-  noDataText: {
-    color: '#fff',
-    textAlign: 'center',
-    marginVertical: 20,
-    fontSize: 16,
   },
   updateValuesButton: {
     marginTop: 10,

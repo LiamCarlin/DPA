@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import Header from '../components/Header';
+import UserProgressGraph from '../components/UserProgressGraph';
 import { auth, db } from '../firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
 
 interface HomeScreenProps {
-  rooms: { name: string; participants: { name: string; winLoss: number }[] }[];
+  rooms: { name: string; participants: { name: string; winLoss: number; history: { date: string; amount: number }[] }[] }[];
   navigateTo: (screen: 'Home' | 'ActiveRooms' | 'Room' | 'Profile', roomIndex?: number) => void;
   openMenu: () => void;
 }
 
 const HomeScreen: React.FC<HomeScreenProps> = ({ rooms, navigateTo, openMenu }) => {
-  const [profilePhotoIndex, setProfilePhotoIndex] = useState<number | null>(null); // Store profile photo as an index
+  const [profilePhotoIndex, setProfilePhotoIndex] = useState<number | null>(null);
+  const [username, setUsername] = useState('');
+  const [userData, setUserData] = useState<{ date: string; amount: number }[]>([]);
   const userId = auth.currentUser?.uid;
 
   const profilePictures = [
@@ -43,33 +46,49 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ rooms, navigateTo, openMenu }) 
   ];
 
   useEffect(() => {
-    // Fetch the profile photo index from the database
-    const fetchProfilePhoto = async () => {
+    const fetchUserData = async () => {
       if (userId) {
         const userDoc = doc(db, 'users', userId);
         const docSnap = await getDoc(userDoc);
         if (docSnap.exists()) {
           const data = docSnap.data();
-          setProfilePhotoIndex(data.profilePhoto ?? null); // Set the profile photo index
+          setProfilePhotoIndex(data.profilePhoto ?? null);
+          setUsername(data.username || '');
         }
       }
     };
-    fetchProfilePhoto();
+    fetchUserData();
   }, [userId]);
+
+  useEffect(() => {
+    if (username && rooms.length > 0) {
+      // Collect all history entries for the current user across all rooms
+      const allHistory: { date: string; amount: number }[] = [];
+      rooms.forEach(room => {
+        const userInRoom = room.participants.find(p => p.name === username);
+        if (userInRoom && userInRoom.history) {
+          allHistory.push(...userInRoom.history);
+        }
+      });
+      
+      // Sort by date
+      allHistory.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      setUserData(allHistory);
+    }
+  }, [rooms, username]);
 
   const resolvedProfilePhoto =
     profilePhotoIndex !== null && profilePhotoIndex >= 0 && profilePhotoIndex < profilePictures.length
       ? profilePictures[profilePhotoIndex]
-      : require('../assets/profile-placeholder.png'); // Default placeholder image
+      : require('../assets/profile-placeholder.png');
 
   return (
     <View style={styles.container}>
-      {/* Pass profile photo and onPress handler to Header */}
       <Header
         title="DPA"
         onMenuPress={openMenu}
-        profileImageUrl={resolvedProfilePhoto} // Resolved profile photo
-        onProfilePress={() => navigateTo('Profile')} // Navigate to ProfileScreen on press
+        profileImageUrl={resolvedProfilePhoto}
+        onProfilePress={() => navigateTo('Profile')}
       />
 
       <View style={styles.buttonsContainer}>
@@ -81,12 +100,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ rooms, navigateTo, openMenu }) 
         </TouchableOpacity>
       </View>
 
-      <View style={styles.graphContainer}>
-        <Text style={styles.sectionTitle}>Recent Progress</Text>
-        <View style={styles.graphPlaceholder}>
-          <Text style={styles.graphPlaceholderText}>[Graph Placeholder]</Text>
+      {username ? (
+        <UserProgressGraph data={userData} username={username} />
+      ) : (
+        <View style={styles.graphContainer}>
+          <Text style={styles.noUsernameText}>Set your username in Profile to see your progress</Text>
         </View>
-      </View>
+      )}
 
       <View style={styles.activeRoomsContainer}>
         <View style={styles.activeRoomsHeader}>
@@ -198,6 +218,11 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
     marginVertical: 20,
+  },
+  noUsernameText: {
+    color: '#888',
+    textAlign: 'center',
+    padding: 20,
   },
 });
 
