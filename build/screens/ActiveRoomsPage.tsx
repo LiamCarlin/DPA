@@ -23,8 +23,8 @@ const ActiveRoomsPage: React.FC<ActiveRoomsPageProps> = ({
   const [modalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [username, setUsername] = useState('');
+  const [showRemoveButtons, setShowRemoveButtons] = useState(false);
   const userId = auth.currentUser?.uid;
-  const [removeModalVisible, setRemoveModalVisible] = useState(false);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -46,131 +46,60 @@ const ActiveRoomsPage: React.FC<ActiveRoomsPageProps> = ({
     fetchUserData();
   }, [userId]);
 
-  const handleAddRoom = async (newRoom: {
-    name: string;
-    participants: Participant[];
-  }) => {
-    try {
-      const updatedRooms = [...rooms, newRoom];
-      setRooms(updatedRooms);
-      if (userId) {
-        const userDoc = doc(db, 'users', userId);
-        await updateDoc(userDoc, { rooms: updatedRooms });
-      }
-      setModalVisible(false);
-    } catch (error) {
-      console.error('Error adding room:', error);
-    }
-  };
-
-  const getTotalWinLoss = (participants: Participant[]) => {
-    return participants.reduce((total, participant) => total + participant.winLoss, 0);
-  };
-
-  const handleRemoveParticipant = async (participantName: string, roomIndex: number) => {
-    try {
-      const updatedRooms = [...rooms];
-      updatedRooms[roomIndex] = {
-        ...updatedRooms[roomIndex],
-        participants: updatedRooms[roomIndex].participants.filter(
-          (p) => p.name !== participantName
-        ),
-      };
-
-      setRooms(updatedRooms);
-
-      if (userId) {
-        const userDoc = doc(db, 'users', userId);
-        await updateDoc(userDoc, { rooms: updatedRooms });
-      }
-
-      Alert.alert('Success', `${participantName} has been removed from the room.`);
-    } catch (error) {
-      console.error('Error removing participant:', error);
-      Alert.alert('Error', 'Failed to remove participant. Please try again.');
-    }
+  const handleRemoveRoom = async (roomIndex: number) => {
+    Alert.alert(
+      'Confirm Removal',
+      'Are you sure you want to remove this room?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const updatedRooms = rooms.filter((_, index) => index !== roomIndex);
+              setRooms(updatedRooms);
+              if (userId) {
+                const userDoc = doc(db, 'users', userId);
+                await updateDoc(userDoc, { rooms: updatedRooms });
+              }
+              Alert.alert('Success', 'Room has been deleted.');
+            } catch (error) {
+              console.error('Error deleting room:', error);
+              Alert.alert('Error', 'Failed to delete room. Please try again.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const renderRoomCard = ({ item, index }: { item: { name: string; participants: Participant[] }, index: number }) => (
-    <TouchableOpacity 
-      style={styles.roomCard}
-      onPress={() => navigateTo('Room', index)}
-      onLongPress={() => {
-        Alert.alert(
-          'Room Options',
-          'What would you like to do?',
-          [
-            {
-              text: 'Remove Participant',
-              onPress: () => {
-                Alert.alert(
-                  'Select Participant to Remove',
-                  'Who would you like to remove?',
-                  [
-                    ...item.participants.map((participant) => ({
-                      text: participant.name,
-                      onPress: () => handleRemoveParticipant(participant.name, index),
-                    })),
-                    {
-                      text: 'Cancel',
-                      style: 'cancel',
-                    },
-                  ]
-                );
-              },
-            },
-            {
-              text: 'Delete Room',
-              onPress: async () => {
-                try {
-                  const updatedRooms = rooms.filter((_, i) => i !== index);
-                  setRooms(updatedRooms);
-                  if (userId) {
-                    const userDoc = doc(db, 'users', userId);
-                    await updateDoc(userDoc, { rooms: updatedRooms });
-                  }
-                  Alert.alert('Success', 'Room has been deleted.');
-                } catch (error) {
-                  console.error('Error deleting room:', error);
-                  Alert.alert('Error', 'Failed to delete room. Please try again.');
-                }
-              },
-              style: 'destructive',
-            },
-            {
-              text: 'Cancel',
-              style: 'cancel',
-            },
-          ]
-        );
-      }}
-    >
-      <View style={styles.roomHeader}>
-        <Text style={styles.roomName}>{item.name}</Text>
-        <MaterialIcons name="arrow-forward-ios" size={20} color="#888" />
-      </View>
-      
-      <View style={styles.roomStats}>
-        <View style={styles.statItem}>
-          <Text style={styles.statLabel}>Players</Text>
-          <Text style={styles.statValue}>{item.participants.length}</Text>
+    <View style={styles.roomCard}>
+      <TouchableOpacity onPress={() => navigateTo('Room', index)}>
+        <View style={styles.roomHeader}>
+          <Text style={styles.roomName}>{item.name}</Text>
+          <MaterialIcons name="arrow-forward-ios" size={20} color="#888" />
         </View>
-        <View style={styles.statItem}>
-          <Text style={styles.statLabel}>Total Pool</Text>
-          <Text style={[styles.statValue, { color: getTotalWinLoss(item.participants) >= 0 ? '#4ADE80' : '#EF4444' }]}>
-            ${Math.abs(getTotalWinLoss(item.participants)).toFixed(2)}
-          </Text>
+        <View style={styles.roomStats}>
+          <View style={styles.statItem}>
+            <Text style={styles.statLabel}>Players</Text>
+            <Text style={styles.statValue}>{item.participants.length}</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={styles.statLabel}>Total Pool</Text>
+            <Text style={styles.statValue}>
+              ${item.participants.reduce((total, participant) => total + participant.winLoss, 0).toFixed(2)}
+            </Text>
+          </View>
         </View>
-        <View style={styles.statItem}>
-          <Text style={styles.statLabel}>Last Active</Text>
-          <Text style={styles.statValue}>
-            {item.participants[0]?.history?.length > 0
-              ? new Date(item.participants[0].history[item.participants[0].history.length - 1].date).toLocaleDateString()
-              : 'Never'}
-          </Text>
-        </View>
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+      {showRemoveButtons && (
+        <TouchableOpacity style={styles.removeButton} onPress={() => handleRemoveRoom(index)}>
+          <Text style={styles.removeButtonText}>Remove Room</Text>
+        </TouchableOpacity>
+      )}
+    </View>
   );
 
   if (loading) {
@@ -183,8 +112,15 @@ const ActiveRoomsPage: React.FC<ActiveRoomsPageProps> = ({
 
   return (
     <View style={styles.container}>
-      <Header title="Active Rooms" onMenuPress={openMenu} />
-
+      <Header
+        title="Active Rooms"
+        onMenuPress={openMenu}
+        rightComponent={
+          <TouchableOpacity onPress={() => setShowRemoveButtons(!showRemoveButtons)}>
+            <MaterialIcons name="delete" size={24} color="#d9534f" />
+          </TouchableOpacity>
+        }
+      />
       {rooms.length === 0 ? (
         <View style={styles.emptyState}>
           <MaterialIcons name="casino" size={64} color="#888" />
@@ -199,7 +135,6 @@ const ActiveRoomsPage: React.FC<ActiveRoomsPageProps> = ({
           contentContainerStyle={styles.listContainer}
         />
       )}
-
       <TouchableOpacity
         style={styles.addButton}
         onPress={() => {
@@ -226,11 +161,13 @@ const ActiveRoomsPage: React.FC<ActiveRoomsPageProps> = ({
         <MaterialIcons name="add" size={24} color="#fff" />
         <Text style={styles.addButtonText}>Create Room</Text>
       </TouchableOpacity>
-
       <AddRoomModal
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
-        onAddRoom={handleAddRoom}
+        onAddRoom={(newRoom) => {
+          setRooms([...rooms, newRoom]);
+          setModalVisible(false);
+        }}
         username={username}
       />
     </View>
@@ -286,6 +223,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+  removeButton: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: '#d9534f',
+    borderRadius: 5,
+    alignItems: 'center',
+  },
+  removeButtonText: {
+    color: '#fff',
+    fontSize: 16,
+  },
   addButton: {
     position: 'absolute',
     bottom: 24,
@@ -318,6 +266,21 @@ const styles = StyleSheet.create({
     color: '#888',
     fontSize: 16,
     marginTop: 8,
+  },
+  toggleRemoveButton: {
+    position: 'absolute',
+    top: 24,
+    right: 24,
+    backgroundColor: '#4ADE80',
+    borderRadius: 28,
+    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    elevation: 4,
+  },
+  toggleRemoveButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
   },
 });
 

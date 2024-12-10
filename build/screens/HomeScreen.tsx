@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Alert } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import axios from 'axios';
 import Header from '../components/Header';
 import UserProgressGraph from '../components/UserProgressGraph';
 import { auth, db } from '../firebaseConfig';
@@ -15,6 +17,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ rooms, navigateTo, openMenu }) 
   const [profilePhotoIndex, setProfilePhotoIndex] = useState<number | null>(null);
   const [username, setUsername] = useState('');
   const [userData, setUserData] = useState<{ date: string; amount: number }[]>([]);
+  const [photo, setPhoto] = useState<string | null>(null);
   const userId = auth.currentUser?.uid;
 
   const profilePictures = [
@@ -79,8 +82,50 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ rooms, navigateTo, openMenu }) 
 
   const resolvedProfilePhoto =
     profilePhotoIndex !== null && profilePhotoIndex >= 0 && profilePhotoIndex < profilePictures.length
-      ? profilePictures[profilePhotoIndex]
-      : require('../assets/profile-placeholder.png');
+      ? Image.resolveAssetSource(profilePictures[profilePhotoIndex]).uri
+      : Image.resolveAssetSource(require('../assets/profile-placeholder.png')).uri;
+
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      alert('Sorry, we need camera permissions to make this work!');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 1,
+    });
+
+    if (!result.cancelled) {
+      setPhoto(result.uri);
+      usePhoto(result.uri);
+    }
+  };
+
+  const usePhoto = async (uri: string) => {
+    const formData = new FormData();
+    formData.append('file', {
+      uri,
+      name: 'photo.jpg',
+      type: 'image/jpeg',
+    } as any);
+
+    try {
+      const response = await axios.post('http://localhost:5000/infer', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      console.log(response.data);
+      Alert.alert('API Response', JSON.stringify(response.data));
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error', 'Failed to call API');
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -92,13 +137,19 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ rooms, navigateTo, openMenu }) 
       />
 
       <View style={styles.buttonsContainer}>
-        <TouchableOpacity style={styles.button} onPress={() => alert('Chip Counter Feature')}>
+        <TouchableOpacity style={styles.button} onPress={takePhoto}>
           <Text style={styles.buttonText}>📸 Chip Counter</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={() => alert('Calculate Odds Feature')}>
           <Text style={styles.buttonText}>➕ Calculate Odds</Text>
         </TouchableOpacity>
       </View>
+
+      {photo && (
+        <View style={styles.photoContainer}>
+          <Image source={{ uri: photo }} style={styles.photo} />
+        </View>
+      )}
 
       {username ? (
         <UserProgressGraph data={userData} username={username} />
@@ -156,21 +207,25 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
   },
+  photoContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  photo: {
+    width: 200,
+    height: 200,
+    borderRadius: 10,
+  },
   graphContainer: {
     backgroundColor: '#1E293B',
     padding: 15,
     borderRadius: 10,
     marginBottom: 20,
   },
-  graphPlaceholder: {
-    height: 150,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#333',
-    borderRadius: 10,
-  },
-  graphPlaceholderText: {
+  noUsernameText: {
     color: '#888',
+    textAlign: 'center',
+    padding: 20,
   },
   activeRoomsContainer: {
     backgroundColor: '#1E293B',
@@ -187,6 +242,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#fff',
+    textAlign: 'center',
   },
   addButton: {
     backgroundColor: '#4ADE80',
@@ -218,11 +274,6 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
     marginVertical: 20,
-  },
-  noUsernameText: {
-    color: '#888',
-    textAlign: 'center',
-    padding: 20,
   },
 });
 

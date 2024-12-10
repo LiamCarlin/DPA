@@ -9,11 +9,12 @@ import Menu from '../components/Menu';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebaseConfig';
 import { Participant } from '../types';
+import FriendsPage from '../screens/FriendsPage'; // Import FriendsPage
 
 const Index: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<
-    'Home' | 'ActiveRooms' | 'Room' | 'Profile' | 'Login'
-  >('Login'); // Add 'Profile' to valid screens
+    'Home' | 'ActiveRooms' | 'Room' | 'Profile' | 'Login' | 'Friends'
+  >('Login'); // Add 'Friends' to valid screens
   const [rooms, setRooms] = useState<{ name: string; participants: Participant[] }[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false); // Controls the menu visibility
@@ -36,7 +37,7 @@ const Index: React.FC = () => {
 
   const closeMenu = () => setMenuOpen(false); // Function to close the menu
 
-  const navigateTo = (screen: 'Home' | 'ActiveRooms' | 'Room' | 'Profile' | 'Login', roomIndex?: number) => {
+  const navigateTo = (screen: 'Home' | 'ActiveRooms' | 'Room' | 'Profile' | 'Login' | 'Friends', roomIndex?: number) => {
     setCurrentScreen(screen);
     if (roomIndex !== undefined) {
       setSelectedRoom(roomIndex);
@@ -73,6 +74,8 @@ const Index: React.FC = () => {
         );
       case 'Profile':
         return <ProfileScreen openMenu={openMenu} />; // Pass `openMenu` to ProfileScreen
+      case 'Friends':
+        return <FriendsPage navigateTo={navigateTo} />; // Pass navigateTo to FriendsPage
       default:
         return null;
     }

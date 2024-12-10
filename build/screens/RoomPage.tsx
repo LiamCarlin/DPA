@@ -5,25 +5,22 @@ import Header from '../components/Header';
 import RoomGraph from '../components/RoomGraph';
 import { db, auth } from '../firebaseConfig';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 
 interface Participant {
   name: string;
   winLoss: number;
-  history: { date: string; amount: number; in?: number; out?: number }[]; // Add `in` and `out` here
+  history: { date: string; amount: number; in?: number; out?: number }[];
   in?: string;
   out?: string;
   selectedDate?: string;
 }
 
-
 interface RoomPageProps {
   room: { name: string; participants: Participant[] };
   roomIndex: number;
-  setRooms: React.Dispatch<
-    React.SetStateAction<
-      { name: string; participants: Participant[] }[]
-    >
-  >;
+  setRooms: React.Dispatch<React.SetStateAction<{ name: string; participants: Participant[] }[]>>;
   navigateTo: (screen: 'Home' | 'ActiveRooms') => void;
 }
 
@@ -39,6 +36,10 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
   const [isEditDateModalVisible, setEditDateModalVisible] = useState(false);
   const [isEditValuesModalVisible, setEditValuesModalVisible] = useState(false);
   const [selectedEditDate, setSelectedEditDate] = useState<string | null>(null);
+  
+  type RoomPageNavigationProp = StackNavigationProp<RootStackParamList, 'EditDateScreen'>;
+  
+  const navigation = useNavigation<RoomPageNavigationProp>();
 
   const userId = auth.currentUser?.uid;
 
@@ -176,7 +177,6 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
       ToastAndroid.show('Error updating data. Please try again.', ToastAndroid.SHORT);
     }
   };
-  
 
   const addParticipant = () => {
     if (newParticipantName.trim() === '') {
@@ -218,7 +218,66 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
       ]
     );
   };
-  
+
+  const handleDeleteDateEntry = async () => {
+    if (!selectedEditDate) return;
+
+    const newParticipants = updatedParticipants.map((participant) => {
+      const updatedHistory = participant.history.filter((entry) => entry.date !== selectedEditDate);
+      const newWinLoss = updatedHistory.reduce((acc, entry) => acc + entry.amount, 0);
+
+      return {
+        ...participant,
+        winLoss: newWinLoss,
+        history: updatedHistory,
+      };
+    });
+
+    setUpdatedParticipants(newParticipants);
+    setEditValuesModalVisible(false);
+    setSelectedEditDate(null);
+    ToastAndroid.show('Date entry deleted successfully!', ToastAndroid.SHORT);
+
+    // Save to Firestore
+    if (userId) {
+      const userDoc = doc(db, 'users', userId);
+      const userSnap = await getDoc(userDoc);
+      
+      if (userSnap.exists()) {
+        // Get current rooms array
+        const currentData = userSnap.data();
+        const updatedRooms = [...currentData.rooms];
+        
+        // Update the specific room
+        updatedRooms[roomIndex] = {
+          ...updatedRooms[roomIndex],
+          name: room.name,
+          participants: newParticipants
+        };
+
+        // Update Firestore
+        await updateDoc(userDoc, {
+          rooms: updatedRooms
+        });
+
+        // Update local state
+        setRooms(updatedRooms);
+      }
+    }
+  };
+
+  // Function to handle editing values for a selected date
+  const handleEditValues = (date: string) => {
+    setSelectedEditDate(date);
+    setEditDateModalVisible(false);
+    setTimeout(() => {
+      setEditValuesModalVisible(true);
+    }, 500); // Adding a delay to ensure smooth transition
+  };
+
+  const handleEditDate = () => {
+    navigation.navigate('EditDateScreen', { participants: updatedParticipants });
+  };
 
   return (
     <View style={styles.container}>
@@ -298,9 +357,9 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
       {isUpdating && (
         <TouchableOpacity
           style={styles.updateValuesButton}
-          onPress={() => setEditDateModalVisible(true)}
+          onPress={handleEditDate}
         >
-          <Text style={styles.updateValuesButtonText}>Edit Values</Text>
+          <Text style={styles.updateValuesButtonText}>Edit Date</Text>
         </TouchableOpacity>
       )}
       <DateTimePickerModal
@@ -309,7 +368,7 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
         onConfirm={handleDateConfirm}
         onCancel={() => setDatePickerVisible(false)}
       />
-  
+
       {/* Add Participant Modal */}
       <Modal
         transparent
@@ -337,169 +396,172 @@ const RoomPage: React.FC<RoomPageProps> = ({ room, roomIndex, setRooms, navigate
       </Modal>
   
       {/* Remove Participant Modal */}
-      <Modal
-        transparent
-        visible={removeModalVisible}
-        animationType="slide"
-        onRequestClose={() => setRemoveModalVisible(false)}
-      >
-        <TouchableWithoutFeedback onPress={() => setRemoveModalVisible(false)}>
-          <View style={styles.modalContainer}>
-            <TouchableWithoutFeedback>
-              <View style={styles.modalContent}>
-                <FlatList
-                  data={updatedParticipants}
-                  keyExtractor={(item, index) => index.toString()}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      style={styles.removeButton}
-                      onPress={() => handleRemoveParticipant(item.name)}
-                    >
-                      <Text style={styles.removeButtonText}>{item.name}</Text>
-                    </TouchableOpacity>
-                  )}
-                />
-                <TouchableOpacity
-                  style={styles.modalButton}
-                  onPress={() => setRemoveModalVisible(false)}
-                >
-                  <Text style={styles.modalButtonText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
-  
-      {/* Date Selection Modal */}
-      <Modal
-        transparent
-        visible={isEditDateModalVisible}
-        animationType="slide"
-        onRequestClose={() => setEditDateModalVisible(false)}
-      >
-        <TouchableWithoutFeedback onPress={() => setEditDateModalVisible(false)}>
-          <View style={styles.modalContainer}>
-            <TouchableWithoutFeedback>
-              <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Select a Date</Text>
-                <FlatList
-                  data={[
-                    ...new Set(
-                      updatedParticipants.flatMap((p) =>
-                        p.history ? p.history.map((h) => h.date) : []
-                      )
-                    ),
-                  ]} // Extract unique dates
-                  keyExtractor={(item, index) => index.toString()}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      style={styles.dateButton}
-                      onPress={() => {
-                        console.log('Date selected:', item); // Debugging log
-                        setSelectedEditDate(item); // Set the selected date
-                        setEditDateModalVisible(false); // Close Date Selection Modal
-                        setEditValuesModalVisible(true); // Open Edit Values Modal
-                      }}
-                    >
-                      <Text style={styles.dateButtonText}>{formatDate(item)}</Text>
-                    </TouchableOpacity>
-                  )}
-                />
-                <TouchableOpacity
-                  style={styles.modalButton}
-                  onPress={() => setEditDateModalVisible(false)}
-                >
-                  <Text style={styles.modalButtonText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
+        <Modal
+          transparent
+          visible={removeModalVisible}
+          animationType="slide"
+          onRequestClose={() => setRemoveModalVisible(false)}
+        >
+          <TouchableWithoutFeedback onPress={() => setRemoveModalVisible(false)}>
+            <View style={styles.modalContainer}>
+              <TouchableWithoutFeedback>
+                <View style={styles.modalContent}>
+                  <FlatList
+                    data={updatedParticipants}
+                    keyExtractor={(item, index) => index.toString()}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={styles.removeItem}
+                        onPress={() => handleRemoveParticipant(item.name)}
+                      >
+                        <Text style={styles.modalItemText}>{item.name}</Text>
+                      </TouchableOpacity>
+                    )}
+                  />
+                  <TouchableOpacity
+                    style={styles.modalButton}
+                    onPress={() => setRemoveModalVisible(false)}
+                  >
+                    <Text style={styles.modalButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
 
-  
-      {/* Edit Values Modal */}
-      <Modal
-        transparent
-        visible={isEditValuesModalVisible}
-        animationType="slide"
-        onRequestClose={() => setEditValuesModalVisible(false)}
-      >
-        <TouchableWithoutFeedback onPress={() => setEditValuesModalVisible(false)}>
-          <View style={styles.modalContainer}>
-            <TouchableWithoutFeedback>
-              <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Edit Values for {formatDate(selectedEditDate || '')}</Text>
-                {updatedParticipants.map((participant, index) => {
-                  const historyEntry = participant.history?.find((h) => h.date === selectedEditDate);
-                  if (!historyEntry) return null; // Skip participants without matching history
+        {/* Date Selection Modal */}
+        <Modal
+          transparent
+          visible={isEditDateModalVisible}
+          animationType="slide"
+          onRequestClose={() => setEditDateModalVisible(false)}
+        >
+          <TouchableWithoutFeedback onPress={() => setEditDateModalVisible(false)}>
+            <View style={styles.modalContainer}>
+              <TouchableWithoutFeedback>
+                <View style={styles.modalContent}>
+                  <Text style={styles.modalTitle}>Select a Date</Text>
+                  <FlatList
+                    data={[
+                      ...new Set(
+                        updatedParticipants.flatMap((p) =>
+                          p.history ? p.history.map((h) => h.date) : []
+                        )
+                      ),
+                    ]} // Extract unique dates
+                    keyExtractor={(item, index) => index.toString()}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={styles.dateButton}
+                        onPress={() => handleEditValues(item)}
+                      >
+                        <Text style={styles.dateButtonText}>{formatDate(item)}</Text>
+                      </TouchableOpacity>
+                    )}
+                  />
+                  <TouchableOpacity
+                    style={styles.modalButton}
+                    onPress={() => setEditDateModalVisible(false)}
+                  >
+                    <Text style={styles.modalButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
 
-                  return (
-                    <View key={index} style={styles.participantRow}>
-                      <Text style={styles.participantName}>{participant.name}</Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="In"
-                        placeholderTextColor="#888"
-                        value={historyEntry.in?.toString() || ''}
-                        onChangeText={(text) => {
-                          const newIn = parseFloat(text) || 0;
-                          setUpdatedParticipants((prev) =>
-                            prev.map((p) =>
-                              p.name === participant.name
-                                ? {
-                                    ...p,
-                                    history: p.history.map((h) =>
-                                      h.date === selectedEditDate ? { ...h, in: newIn } : h
-                                    ),
-                                  }
-                                : p
-                            )
-                          );
-                        }}
-                      />
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Out"
-                        placeholderTextColor="#888"
-                        value={historyEntry.out?.toString() || ''}
-                        onChangeText={(text) => {
-                          const newOut = parseFloat(text) || 0;
-                          setUpdatedParticipants((prev) =>
-                            prev.map((p) =>
-                              p.name === participant.name
-                                ? {
-                                    ...p,
-                                    history: p.history.map((h) =>
-                                      h.date === selectedEditDate ? { ...h, out: newOut } : h
-                                    ),
-                                  }
-                                : p
-                            )
-                          );
-                        }}
-                      />
-                    </View>
-                  );
-                })}
-                <TouchableOpacity
-                  style={styles.modalButton}
-                  onPress={() => setEditValuesModalVisible(false)}
-                >
-                  <Text style={styles.modalButtonText}>Save</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.modalCancelButton}
-                  onPress={() => setEditValuesModalVisible(false)}
-                >
-                  <Text style={styles.modalCancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
+        {/* Edit Values Modal */}
+        <Modal
+          transparent
+          visible={isEditValuesModalVisible}
+          animationType="slide"
+          onRequestClose={() => setEditValuesModalVisible(false)}
+        >
+          <TouchableWithoutFeedback onPress={() => setEditValuesModalVisible(false)}>
+            <View style={styles.modalContainer}>
+              <TouchableWithoutFeedback>
+                <View style={styles.modalContent}>
+                  <Text style={styles.modalTitle}>Edit Values for {formatDate(selectedEditDate || '')}</Text>
+                  {updatedParticipants.map((participant, index) => {
+                    const historyEntry = participant.history?.find((h) => h.date === selectedEditDate);
+                    if (!historyEntry) return null; // Skip participants without matching history
+
+                    return (
+                      <View key={index} style={styles.participantRow}>
+                        <Text style={styles.participantName}>{participant.name}</Text>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="In"
+                          placeholderTextColor="#888"
+                          value={historyEntry.in?.toString() || ''}
+                          onChangeText={(text) => {
+                            const newIn = parseFloat(text) || 0;
+                            setUpdatedParticipants((prev) =>
+                              prev.map((p) =>
+                                p.name === participant.name
+                                  ? {
+                                      ...p,
+                                      history: p.history.map((h) =>
+                                        h.date === selectedEditDate ? { ...h, in: newIn } : h
+                                      ),
+                                    }
+                                  : p
+                              )
+                            );
+                          }}
+                        />
+                        <TextInput
+                          style={styles.input}
+                          placeholder="Out"
+                          placeholderTextColor="#888"
+                          value={historyEntry.out?.toString() || ''}
+                          onChangeText={(text) => {
+                            const newOut = parseFloat(text) || 0;
+                            setUpdatedParticipants((prev) =>
+                              prev.map((p) =>
+                                p.name === participant.name
+                                  ? {
+                                      ...p,
+                                      history: p.history.map((h) =>
+                                        h.date === selectedEditDate ? { ...h, out: newOut } : h
+                                      ),
+                                    }
+                                  : p
+                              )
+                            );
+                          }}
+                        />
+                      </View>
+                    );
+                  })}
+                  <TouchableOpacity
+                    style={styles.modalButton}
+                    onPress={() => {
+                      setEditValuesModalVisible(false);
+                      handleConfirmUpdate();
+                    }}
+                  >
+                    <Text style={styles.modalButtonText}>Save</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.modalCancelButton}
+                    onPress={() => setEditValuesModalVisible(false)}
+                  >
+                    <Text style={styles.modalCancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={handleDeleteDateEntry}
+                  >
+                    <Text style={styles.deleteButtonText}>Delete Date Entry</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
     </View>
   );
   
@@ -556,19 +618,15 @@ const styles = StyleSheet.create({
   },
   dateButtonText: {
     color: '#fff',
-    textAlign: 'center',
-    fontSize: 14,
   },
   buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 20,
+    marginVertical: 10,
   },
   addButton: {
-    flex: 1,
-    marginRight: 10,
+    backgroundColor: '#4ADE80',
     padding: 10,
-    backgroundColor: '#5cb85c',
     borderRadius: 5,
     alignItems: 'center',
   },
@@ -577,9 +635,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   removeButton: {
-    flex: 1,
-    padding: 10,
     backgroundColor: '#d9534f',
+    padding: 10,
     borderRadius: 5,
     alignItems: 'center',
   },
@@ -587,100 +644,100 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
   },
+  confirmButton: {
+    backgroundColor: '#4ADE80',
+    padding: 10,
+    borderRadius: 5,
+    alignItems: 'center',
+    marginVertical: 10,
+  },
+  disabledButton: {
+    backgroundColor: '#888',
+  },
+  confirmButtonText: {
+    color: '#fff',
+    fontSize: 16,
+  },
+  updateValuesButton: {
+    backgroundColor: '#4ADE80',
+    padding: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginVertical: 10,
+  },
+  updateValuesButtonText: {
+    color: '#fff',
+    fontSize: 16,
+  },
   modalContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   modalContent: {
-    width: '80%',
-    backgroundColor: '#2e2e2e',
-    borderRadius: 10,
+    backgroundColor: '#1E293B',
     padding: 20,
-    alignItems: 'center',
+    borderRadius: 10,
+    width: '80%',
   },
   modalTitle: {
     color: '#fff',
     fontSize: 18,
+    fontWeight: 'bold',
     marginBottom: 10,
-    textAlign: 'center',
   },
   modalInput: {
-    backgroundColor: '#444',
+    backgroundColor: '#333',
     color: '#fff',
-    width: '100%',
-    borderRadius: 5,
-    paddingHorizontal: 10,
-    marginBottom: 20,
-  },
-  modalButton: {
-    backgroundColor: '#5cb85c',
     padding: 10,
     borderRadius: 5,
     marginBottom: 10,
-    width: '100%',
+  },
+  modalButton: {
+    backgroundColor: '#4ADE80',
+    padding: 10,
+    borderRadius: 5,
     alignItems: 'center',
+    marginVertical: 5,
   },
   modalButtonText: {
     color: '#fff',
     fontSize: 16,
   },
   modalCancelButton: {
-    backgroundColor: '#d9534f',
+    backgroundColor: '#888',
     padding: 10,
     borderRadius: 5,
-    marginTop: 10,
-    width: '100%',
     alignItems: 'center',
+    marginVertical: 5,
   },
   modalCancelButtonText: {
     color: '#fff',
     fontSize: 16,
   },
-  removeItem: {
+  deleteButton: {
+    backgroundColor: '#d9534f',
     padding: 10,
-    marginVertical: 5,
-    backgroundColor: '#444',
     borderRadius: 5,
-    width: '100%',
     alignItems: 'center',
+    marginVertical: 5,
+  },
+  deleteButtonText: {
+    color: '#fff',
+    fontSize: 16,
+  },
+  removeItem: {
+    backgroundColor: '#d9534f',
+    padding: 10,
+    borderRadius: 5,
+    alignItems: 'center',
+    marginVertical: 5,
   },
   modalItemText: {
     color: '#fff',
     fontSize: 16,
   },
-  confirmButton: {
-    backgroundColor: '#4ADE80',
-    padding: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  disabledButton: {
-    backgroundColor: '#555',
-  },
-  confirmButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  updateValuesButton: {
-    marginTop: 10,
-    padding: 10,
-    backgroundColor: '#1E90FF',
-    borderRadius: 5,
-    alignItems: 'center',
-  },
-  updateValuesButtonText: {
-    color: '#fff',
-    fontSize: 16,
-  },
-  participantEditRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-  },
 });
-
 
 export default RoomPage;

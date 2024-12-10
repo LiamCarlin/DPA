@@ -4,31 +4,20 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   Modal,
   FlatList,
   Image,
   Share,
   TextInput,
+  Alert,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
 import { signOut, updatePassword, updateEmail } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { useNavigation, DrawerActions } from '@react-navigation/native';
-import { DrawerNavigationProp } from '@react-navigation/drawer';
 import Header from '../components/Header';
 
-// Define the drawer param list type
-type DrawerParamList = {
-  Profile: undefined;
-  Home: undefined;
-  ActiveRooms: undefined;
-  Room: { roomIndex: number } | undefined;
-  Login: undefined;
-};
-
-const ProfileScreen: React.FC = () => {
-  const navigation = useNavigation<DrawerNavigationProp<DrawerParamList>>();
+const ProfileScreen: React.FC<{ openMenu: () => void }> = ({ openMenu }) => {
   const [profilePhoto, setProfilePhoto] = useState<number | null>(null);
   const [showPhotoPicker, setShowPhotoPicker] = useState(false);
   const [showUsernameModal, setShowUsernameModal] = useState(false);
@@ -37,11 +26,8 @@ const ProfileScreen: React.FC = () => {
   const [username, setUsername] = useState('');
   const [remainingDays, setRemainingDays] = useState<number | null>(null);
   const [showHandRankings, setShowHandRankings] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const userId = auth.currentUser?.uid;
-
-  const handleMenuPress = () => {
-    navigation.dispatch(DrawerActions.toggleDrawer());
-  };
 
   const profilePictures = [
     require('../assets/profile-pictures/pic1.png'),
@@ -71,11 +57,12 @@ const ProfileScreen: React.FC = () => {
     require('../assets/profile-pictures/pic25.png'),
   ];
 
+  const resolvedProfilePhoto = profilePhoto !== null ? profilePictures[profilePhoto] : require('../assets/profile-placeholder.png');
+
   useEffect(() => {
     const fetchUserData = async () => {
       if (userId) {
         try {
-          // Fetch user data
           const userDoc = doc(db, 'users', userId);
           const docSnap = await getDoc(userDoc);
           
@@ -84,14 +71,6 @@ const ProfileScreen: React.FC = () => {
             setProfilePhoto(data.profilePhoto ?? null);
             setUsername(data.username || '');
             setLastUsernameChange(data.lastUsernameChange ? new Date(data.lastUsernameChange) : null);
-          } else {
-            // Create initial user document if it doesn't exist
-            await setDoc(doc(db, 'users', userId), {
-              profilePhoto: null,
-              username: '',
-              lastUsernameChange: null,
-              createdAt: new Date().toISOString()
-            });
           }
         } catch (error) {
           Alert.alert('Error', 'Failed to fetch user data');
@@ -237,6 +216,10 @@ const ProfileScreen: React.FC = () => {
       .catch((error) => Alert.alert('Error', error.message));
   };
 
+  const handleMenuPress = () => {
+    setMenuOpen(!menuOpen);
+  };
+
   const pokerHandRankings = [
     'Royal Flush',
     'Straight Flush',
@@ -252,9 +235,10 @@ const ProfileScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <Header 
+      <Header
         title="Profile"
-        onMenuPress={handleMenuPress}
+        onMenuPress={openMenu}
+        profileImageUrl={resolvedProfilePhoto}
       />
       <View style={styles.contentContainer}>
         <TouchableOpacity onPress={() => setShowPhotoPicker(true)}>
@@ -277,28 +261,33 @@ const ProfileScreen: React.FC = () => {
         >
           <Text style={styles.buttonText}>Change Username</Text>
         </TouchableOpacity>
-
         <TouchableOpacity onPress={handleChangePassword} style={styles.button}>
           <Text style={styles.buttonText}>Change Password</Text>
         </TouchableOpacity>
-
         <TouchableOpacity onPress={handleChangeEmail} style={styles.button}>
           <Text style={styles.buttonText}>Change Email</Text>
         </TouchableOpacity>
-
         <TouchableOpacity onPress={handleShareApp} style={styles.button}>
           <Text style={styles.buttonText}>Share the App</Text>
         </TouchableOpacity>
-
         <TouchableOpacity onPress={() => setShowHandRankings(true)} style={styles.button}>
           <Text style={styles.buttonText}>Hand Rankings</Text>
         </TouchableOpacity>
-
-        {/* Sign Out Button */}
         <TouchableOpacity onPress={handleSignOut} style={styles.signOutButton}>
           <Text style={styles.signOutButtonText}>Sign Out</Text>
         </TouchableOpacity>
       </View>
+
+      <TouchableOpacity onPress={handleMenuPress}>
+        <Ionicons name="menu" size={24} color="black" />
+      </TouchableOpacity>
+      {menuOpen && (
+        <View style={{ position: 'absolute', top: 50, left: 0, right: 0, backgroundColor: 'white' }}>
+          <Text>Menu Item 1</Text>
+          <Text>Menu Item 2</Text>
+          <Text>Menu Item 3</Text>
+        </View>
+      )}
 
       {/* Profile Picture Picker Modal */}
       <Modal visible={showPhotoPicker} transparent animationType="slide">
@@ -384,37 +373,36 @@ const styles = StyleSheet.create({
     backgroundColor: '#121212',
   },
   contentContainer: {
-    flex: 1,
-    alignItems: 'center',
-    padding: 20,
-    paddingTop: 10,
+    padding: 16,
+    backgroundColor: '#121212',
   },
   profileImage: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    marginBottom: 10,
+    alignSelf: 'center',
   },
   changePhotoText: {
-    color: '#4ADE80',
-    textDecorationLine: 'underline',
     textAlign: 'center',
+    color: '#4ADE80',
+    marginTop: 8,
   },
   usernameText: {
-    color: '#fff',
     fontSize: 18,
-    marginVertical: 10,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginVertical: 16,
+    color: '#fff',
   },
   button: {
-    width: '80%',
-    padding: 10,
     backgroundColor: '#4ADE80',
-    borderRadius: 5,
+    padding: 12,
+    borderRadius: 8,
     alignItems: 'center',
-    marginVertical: 5,
+    marginVertical: 8,
   },
   disabledButton: {
-    backgroundColor: '#555',
+    backgroundColor: '#888',
   },
   buttonText: {
     color: '#fff',
@@ -499,6 +487,12 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     textAlign: 'center',
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+    textAlign: 'center', // Add this line
   },
 });
 

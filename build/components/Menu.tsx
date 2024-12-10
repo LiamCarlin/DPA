@@ -36,6 +36,9 @@ const Menu: React.FC<MenuProps> = ({ isOpen, onClose, navigate }) => {
         <TouchableOpacity onPress={() => handleNavigation('Profile')}> 
           <Text style={styles.menuItem}>Profile</Text>
         </TouchableOpacity>
+        <TouchableOpacity onPress={() => handleNavigation('Friends')}>
+          <Text style={styles.menuItem}>Friends</Text>
+        </TouchableOpacity>
       </View>
     </>
   );

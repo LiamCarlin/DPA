@@ -85,7 +85,6 @@ const RoomGraph: React.FC<RoomGraphProps> = ({ participants }) => {
             data={{
               labels: displayDates,
               datasets: datasets,
-              legend: participants.map(p => p.name)
             }}
             width={Dimensions.get('window').width - 60}
             height={220}
@@ -166,14 +165,14 @@ const styles = StyleSheet.create({
     marginRight: 15,
   },
   legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     marginRight: 5,
   },
   legendText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 14,
   },
 });
 

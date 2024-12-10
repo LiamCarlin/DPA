@@ -2,54 +2,40 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 
 interface HeaderProps {
-  title?: string; // Optional title
-  onMenuPress?: () => void; // Optional menu button action
-  onBack?: () => void; // Optional back button action
-  onUpdate?: () => void; // Optional update button action
-  profileImageUrl?: string; // Optional profile image
-  onProfilePress?: () => void; // Action when profile picture is clicked
+  title: string;
+  onMenuPress?: () => void;
+  onBack?: () => void;
+  onUpdate?: () => void;
+  rightComponent?: React.ReactNode;
+  profileImageUrl?: string;
+  onFriendRequestsPress?: () => void; // Add this line
 }
 
-const Header: React.FC<HeaderProps> = ({ 
-  title = '', 
-  onMenuPress, 
-  onBack, 
-  onUpdate, 
-  profileImageUrl, 
-  onProfilePress 
-}) => {
+const Header: React.FC<HeaderProps> = ({ title, onMenuPress, onBack, onUpdate, rightComponent, profileImageUrl, onFriendRequestsPress }) => {
   return (
     <View style={styles.header}>
-      {/* Back Button or Hamburger Menu */}
       {onBack ? (
         <TouchableOpacity onPress={onBack}>
-          <Text style={styles.backButton}>←</Text>
+          <Text style={styles.menuIcon}>←</Text>
         </TouchableOpacity>
       ) : (
-        onMenuPress && (
-          <TouchableOpacity onPress={onMenuPress}>
-            <Text style={styles.menuButton}>☰</Text>
-          </TouchableOpacity>
-        )
-      )}
-
-      {/* Title */}
-      {title ? <Text style={styles.title}>{title}</Text> : null}
-
-      {/* Update Button */}
-      {onUpdate && (
-        <TouchableOpacity onPress={onUpdate}>
-          <Text style={styles.updateButton}>Update</Text>
+        <TouchableOpacity onPress={onMenuPress}>
+          <Text style={styles.menuIcon}>☰</Text>
         </TouchableOpacity>
       )}
-
-      {/* Profile Picture */}
+      <Text style={styles.title}>{title}</Text>
+      {onUpdate && (
+        <TouchableOpacity onPress={onUpdate}>
+          <Text style={styles.updateIcon}>⟳</Text>
+        </TouchableOpacity>
+      )}
+      {rightComponent && <View style={styles.rightComponent}>{rightComponent}</View>}
       {profileImageUrl && (
-        <TouchableOpacity onPress={onProfilePress}>
-          <Image
-            source={{ uri: profileImageUrl }}
-            style={styles.profileImage}
-          />
+        <Image source={{ uri: profileImageUrl }} style={styles.profileImage} />
+      )}
+      {onFriendRequestsPress && (
+        <TouchableOpacity onPress={onFriendRequestsPress}>
+          <Text style={styles.friendRequestsIcon}>👥</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -58,17 +44,14 @@ const Header: React.FC<HeaderProps> = ({
 
 const styles = StyleSheet.create({
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 15,
+    height: 60,
     backgroundColor: '#1E293B',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
   },
-  backButton: {
-    fontSize: 20,
-    color: '#fff',
-  },
-  menuButton: {
+  menuIcon: {
     fontSize: 24,
     color: '#fff',
   },
@@ -79,15 +62,24 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     flex: 1,
   },
-  updateButton: {
-    fontSize: 16,
-    color: '#4ADE80',
+  updateIcon: {
+    fontSize: 24,
+    color: '#fff',
+  },
+  rightComponent: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   profileImage: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#ccc',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginLeft: 10,
+  },
+  friendRequestsIcon: {
+    fontSize: 24,
+    color: '#fff',
+    marginLeft: 10,
   },
 });
 
